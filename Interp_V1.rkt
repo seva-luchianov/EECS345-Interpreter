@@ -223,6 +223,7 @@
       [(Mboolean condition state) (Mstate statement1 state)]
       [else state])))
 
+<<<<<<< HEAD
 ; whileStatement. Handles while loops within the code. Checks a condition and decides whether to execute the statement
 ; based on the value of that condition.
 ; Param: condition = the condition that is checked at the start of each iteration of the while loop. Determines if the loop body
@@ -230,10 +231,17 @@
 ; Param: statement - the body of the loop that will only run if the while condition is met
 ; Param: state - the state of the code before the while loop is executed.
 ; Return: the state of the code after the while loop is executed.
+=======
+;while statement
+>>>>>>> 1c61b5b0dcceb10b5ae56129bf1722ec779d96cd
 (define whileStatement
   (lambda (condition statement state)
     (cond
+<<<<<<< HEAD
      [(Mboolean condition state) (whileStatement condition statement (Mstate statement state))]
+=======
+     [(Mboolean condition state) (Mstate (whileStatement condition statement1 (Mstate statement1 state)) state)]
+>>>>>>> 1c61b5b0dcceb10b5ae56129bf1722ec779d96cd
      [else state])))
 
 ; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type of statement the untouched.
