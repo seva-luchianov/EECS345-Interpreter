@@ -93,12 +93,12 @@
   (lambda (expression state)
     (cond
       [(null? expression) '()]
-      [(or (not (number? (leftoperand expression))) (not (number? (rightoperand expression)))) (cons (operator expression) (cons (lookup (leftoperand expression) state) (cons (lookup (rightoperand expression) state) '())))]
+      [(or (not (number? (leftoperand expression))) (not (number? (rightoperand expression)))) (Mboolean (cons (operator expression) (cons (lookup (leftoperand expression) state) (cons (lookup (rightoperand expression) state) '()))) state)]
       [(eq? (operator expression) '==) (= (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '<) (< (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '>) (> (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '!=) (not (= (leftoperand expression) (rightoperand expression)))]
-      ;[(eq? (operator expression) '<=) (<= (leftoperand expression) (rightoperand expression))]
+      [(eq? (operator expression) '<=) (<= (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '>=) (>= (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '&&) (and (Mboolean (leftoperand expression) state) (Mboolean (rightoperand expression) state))]
       [(eq? (operator expression) '||) (or (Mboolean (leftoperand expression) state) (Mboolean (rightoperand expression) state))]
