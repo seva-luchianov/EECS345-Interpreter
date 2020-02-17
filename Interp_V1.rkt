@@ -26,10 +26,13 @@
       [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state))]
       [else
        (cond
-         [(isValueOp expression) (Mvalue(expression state))]
-         [(eq? (operator expression) 'var) (declare (Mvalue(expression state)) state)]
+         [(isValueOp expression) Mvalue(expression state)]
+         [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
-         [(eq? (operator expression) 'return) (assign (cons (operator expression) (cons (lookup (leftoperand expression) state) '())) state)]
+         [(eq? (operator expression) 'return)
+          (cond
+            ((null? (cdr (cdr expression))) (Mvalue (car (cdr expression)) state))
+            (else (Mvalue (cdr expression) state)))]
          [else state])])))
 
 ;help for sublists
@@ -42,7 +45,6 @@
 
 
 ; M_value (<value1> <value2> +, state) = M_value(<value1>, state) + M_value(<value2>, state)
-;
 ; This is an example of using abstraction to make the code easier to read and maintain
 (define Mvalue
   (lambda (expression state)
@@ -108,7 +110,7 @@
   (lambda (assignment state)
     (cond
       [(null? assignment) state]
-      [(findfirst* (operator assignment) state) (add (operator assignment) (leftoperand assignment) state)]
+      [(findfirst* (operator assignment) state) (add (operator assignment) (Mvalue (leftoperand assignment) state) state)]
       [else (error 'notdeclared "The variable has not yet been declared")])))
 
 ;add
@@ -129,39 +131,39 @@
       [(eq? a (car (flatten lis))) #t]
       [else (findfirst* a (cdr (flatten lis)))])))
 
-(Mvalue_default
- (lambda (expression state)
-   (cond
-     [(= 3 (length expression))
-      ((get_function_for_2_inputs (operator expression))
-                                 (Mvalue (leftoperand expression) state)
-                                 (Mvalue (rightoperand expression) state))]
-     [(= 2 (length expression))
-      ((get_function_for_2_inputs (operator expression))
-                                 (Mvalue (leftoperand expression) state))]
+;(Mvalue_default
+ ;(lambda (expression state)
+  ; (cond
+   ;  [(= 3 (length expression))
+    ;  ((get_function_for_2_inputs (operator expression))
+     ;                            (Mvalue (leftoperand expression) state)
+      ;                           (Mvalue (rightoperand expression) state))]
+     ;[(= 2 (length expression))
+      ;((get_function_for_2_inputs (operator expression))
+       ;                          (Mvalue (leftoperand expression) state))]
 
 ; Pass in the operator atom, and get back the actual function that should be performed
 ; The operator must take 2 inputs, otherwise you will get an error
-(define get_function_for_2_inputs
-  (lambda (operator)
-    (cond
-      ; Math bois
-      ((eq? operator '+) +)
-      ((eq? operator '-) -)
-      ((eq? operator '/) quotient)
-      ((eq? operator '*) *)
-      ((eq? operator '%) remainder)
-      ; Logic bois
-      ((eq? operator '<) <)
-      ((eq? operator '>) >)
-      ((eq? operator '<=) <=)
-      ((eq? operator '>=) >=)
-      ((eq? operator '==) ==)
-      ((eq? operator '!=) !=)
-      ((eq? operator '&&) (lambda (x y) (and x y)))
-      ((eq? operator '||) (lambda (x y) (or x y)))
-      ; Might being doing a goof like (+ x) or something
-      (else (error "Unknown operator for 2 inputs")))))
+;(define get_function_for_2_inputs
+ ; (lambda (operator)
+  ;  (cond
+   ;   ; Math bois
+    ;  ((eq? operator '+) +)
+     ; ((eq? operator '-) -)
+      ;((eq? operator '/) quotient)
+;      ((eq? operator '*) *)
+ ;     ((eq? operator '%) remainder)
+  ;    ; Logic bois
+   ;   ((eq? operator '<) <)
+    ;  ((eq? operator '>) >)
+;     ; ((eq? operator '<=) <=)
+ ;     ((eq? operator '>=) >=)
+  ;    ((eq? operator '==) ==)
+   ;   ((eq? operator '!=) !=)
+    ;  ((eq? operator '&&) (lambda (x y) (and x y)))
+ ;     ((eq? operator '||) (lambda (x y) (or x y)))
+  ;    ; Might being doing a goof like (+ x) or something
+   ;   (else (error "Unknown operator for 2 inputs")))))
 
 (define get_function_for_1_input
   (lambda (operator)
@@ -180,6 +182,6 @@
       ((eq? expression #f) 'false)
       (else expression))))
 
-(define !=
-  (lambda (x y)
-    (not (== x y))))
+;(define !=
+ ; (lambda (x y)
+ ; ;  (not (== x y))))
