@@ -69,6 +69,20 @@
       [(eq? '% (operator expression)) #t]
       [else #f])))
 
+(define isBoolOp
+  (lambda (expression)
+    (cond
+      [(eq? '== (operator expression)) #t]
+      [(eq? '&& (operator expression)) #t]
+      [(eq? '|| (operator expression)) #t]
+      [(eq? '! (operator expression)) #t]
+      [(eq? '< (operator expression)) #t]
+      [(eq? '> (operator expression)) #t]
+      [(eq? '<= (operator expression)) #t]
+      [(eq? '>= (operator expression)) #t]
+      [(eq? '!= (operator expression)) #t]
+      [else #f])))
+
 ; M_boolean
 ; takes a boolean expression and returns the boolean value of that expression
 (define Mboolean
@@ -101,8 +115,16 @@
 (define declare
   (lambda (expression state)
     (cond
+      [(and (not (null? (cdr (cdr expression)))) (not (findfirst* (leftoperand expression) state))) (declareandassign (cdr expression) state)]
       [(not (findfirst* (leftoperand expression) state)) (cons (cons (leftoperand expression) '()) state)]
       [else (error 'alreadydelcared "this variable has alreaday been declared")])))
+
+;declare and assign
+(define declareandassign
+  (lambda (expression state)
+    (cond
+      [(not (findfirst* (operator expression) state)) (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) state)]
+      [#t (display expression)])))
 
 ;> (assign '(x 4) '((x))) --> '((x 4))
 ;assign
@@ -185,3 +207,11 @@
 ;(define !=
  ; (lambda (x y)
  ; ;  (not (== x y))))
+
+;return sublist
+(define firstSublist
+  (lambda (lis)
+    (cond 
+      ((null? lis) '())
+      ((list? (car lis)) (cons (car lis) (cdr lis)))
+      (else (firstSublist (cdr lis))))))
