@@ -9,6 +9,7 @@
 (define else
   (lambda (expression)
     (car (cdr (cdr (cdr expression))))))
+    
 
 ;not important
 ;      [(eq? (car (car (parser filename))) 'var) (declare (car (parser filename)) '((return)))]
@@ -32,7 +33,8 @@
          [(isValueOp expression) Mvalue(expression state)]
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
-         [(eq? (operator expression) 'if) (ifStatement (car (cdr expression)) (rightoperand expression) (else expression) state)]
+         [(and (eq? (operator expression) 'if) (null? (cdr (cdr (cdr expression))))) (ifStatement (car (cdr expression)) (rightoperand expression) state)]
+         [(eq? (operator expression) 'if) (ifelseStatement (car (cdr expression)) (rightoperand expression) (else expression) state)]
          [(eq? (operator expression) 'return)
           (cond
             ((null? (cdr (cdr expression))) (Mvalue (car (cdr expression)) state))
@@ -157,12 +159,19 @@
       [(eq? a (car (flatten lis))) #t]
       [else (findfirst* a (cdr (flatten lis)))])))
 
-;ifStatement
-(define ifStatement
+;ifelseStatement
+(define ifelseStatement
   (lambda (condition statement1 statement2 state)
     (cond
       [(Mboolean condition state) (Mstate statement1 state)]
       [else (Mstate statement2 state)])))
+
+;ifStatement
+(define ifStatement
+  (lambda (condition statement1 state)
+    (cond
+      [(Mboolean condition state) (Mstate statement1 state)]
+      [else state])))
 
 ;(Mvalue_default
  ;(lambda (expression state)
