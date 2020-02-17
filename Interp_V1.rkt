@@ -31,6 +31,7 @@
       [else
        (cond
          [(isValueOp expression) Mvalue(expression state)]
+         [(isBoolOp expression) Mboolean(expression state)]
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(and (eq? (operator expression) 'if) (null? (cdr (cdr (cdr expression))))) (ifStatement (car (cdr expression)) (rightoperand expression) state)]
@@ -38,6 +39,7 @@
          [(eq? (operator expression) 'while) (whileStatement (car (cdr expression)) (rightoperand expression) state)]
          [(eq? (operator expression) 'return)
           (cond
+            ((isBoolOp (leftoperand expression)) (Mboolean (leftoperand expression) state))
             ((null? (cdr (cdr expression))) (Mvalue (car (cdr expression)) state))
             (else (Mvalue (cdr expression) state)))]
          [else state])])))
@@ -70,6 +72,8 @@
 (define isValueOp
   (lambda (expression)
     (cond
+      [(number? expression) #t]
+      [(and (not (number? expression)) (not (list? expression))) #f]
       [(eq? '+ (operator expression)) #t]
       [(eq? '- (operator expression)) #t]
       [(eq? '* (operator expression)) #t]
@@ -80,6 +84,10 @@
 (define isBoolOp
   (lambda (expression)
     (cond
+      [(number? expression) #f]
+      [(eq? 'true expression) #t]
+      [(eq? 'false expression) #t]
+      [(not (list? expression)) #f]
       [(eq? '== (operator expression)) #t]
       [(eq? '&& (operator expression)) #t]
       [(eq? '|| (operator expression)) #t]
@@ -97,13 +105,17 @@
   (lambda (expression state)
     (cond
       [(null? expression) '()]
-      [(or (not (number? (leftoperand expression))) (not (number? (rightoperand expression)))) (Mboolean (cons (operator expression) (cons (lookup (leftoperand expression) state) (cons (lookup (rightoperand expression) state) '()))) state)]
-      [(eq? (operator expression) '==) (= (leftoperand expression) (rightoperand expression))]
-      [(eq? (operator expression) '<) (< (leftoperand expression) (rightoperand expression))]
-      [(eq? (operator expression) '>) (> (leftoperand expression) (rightoperand expression))]
-      [(eq? (operator expression) '!=) (not (= (leftoperand expression) (rightoperand expression)))]
-      [(eq? (operator expression) '<=) (<= (leftoperand expression) (rightoperand expression))]
-      [(eq? (operator expression) '>=) (>= (leftoperand expression) (rightoperand expression))]
+      [(eq? expression 'true) #t]
+      [(eq? expression 'false) #f]
+      ;[(isValueOp expression) (Mvalue expression state)]
+      ;[(or (and (not (isBoolOp (leftoperand expression))) (not (isValueOp (leftoperand expression)))) (and (not (isBoolOp (rightoperand expression))) (not (isValueOp (leftoperand expression))))) (Mboolean (cons (operator expression) (cons (lookup (leftoperand expression) state) (cons (lookup (rightoperand expression) state) '()))) state)]
+      [(and (not (list? expression)) (not (isValueOp expression))) (lookup expression state)]
+      [(eq? (operator expression) '==) (= (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
+      [(eq? (operator expression) '<) (< (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
+      [(eq? (operator expression) '>) (> (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression)state))]
+      [(eq? (operator expression) '!=) (not (= (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))]
+      [(eq? (operator expression) '<=) (<= (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
+      [(eq? (operator expression) '>=) (>= (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
       [(eq? (operator expression) '&&) (and (Mboolean (leftoperand expression) state) (Mboolean (rightoperand expression) state))]
       [(eq? (operator expression) '||) (or (Mboolean (leftoperand expression) state) (Mboolean (rightoperand expression) state))]
       [(eq? (operator expression) '!) (not (Mboolean (leftoperand expression) state))]
@@ -131,8 +143,11 @@
 (define declareandassign
   (lambda (expression state)
     (cond
-      [(not (findfirst* (operator expression) state)) (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) state)]
+      [(and (not (findfirst* (operator expression) state)) (isValueOp (leftoperand expression))) (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) state)]
+      [(and (not (findfirst* (operator expression) state)) (isBoolOp (leftoperand expression))) (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state) '())) state)]
       [#t (display expression)])))
+
+;notboolean
 
 ;> (assign '(x 4) '((x))) --> '((x 4))
 ;assign
@@ -175,6 +190,8 @@
       [(Mboolean condition state) (Mstate statement1 state)]
       [else state])))
 
+<<<<<<< HEAD
+;while statement
 (define whileStatement
   (lambda (condition statement1 state)
     (cond
