@@ -9,9 +9,6 @@
 (define else
   (lambda (expression)
     (car (cdr (cdr (cdr expression))))))
-(define else-begin
-  (lambda (expression)
-    (car (cdr (car (cdr (cdr (cdr expression))))))))
 
 ;not important
 ;      [(eq? (car (car (parser filename))) 'var) (declare (car (parser filename)) '((return)))]
@@ -35,7 +32,7 @@
          [(isValueOp expression) Mvalue(expression state)]
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
-         [(eq? (operator expression) 'if) (ifStatement (car (cdr expression)) (cdr (rightoperand expression)) (else expression) state)]
+         [(eq? (operator expression) 'if) (ifStatement (car (cdr expression)) (rightoperand expression) (else expression) state)]
          [(eq? (operator expression) 'return)
           (cond
             ((null? (cdr (cdr expression))) (Mvalue (car (cdr expression)) state))
@@ -96,12 +93,12 @@
   (lambda (expression state)
     (cond
       [(null? expression) '()]
-      [(or (not (number? (leftoperand expression))) (not (number? (rightoperand expression)))) (display (cons (operator expression) (cons (lookup (leftoperand expression) state) (cons (lookup (rightoperand expression) state) '()))))]
+      [(or (not (number? (leftoperand expression))) (not (number? (rightoperand expression)))) (cons (operator expression) (cons (lookup (leftoperand expression) state) (cons (lookup (rightoperand expression) state) '())))]
       [(eq? (operator expression) '==) (= (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '<) (< (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '>) (> (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '!=) (not (= (leftoperand expression) (rightoperand expression)))]
-      [(eq? (operator expression) '<=) (<= (leftoperand expression) (rightoperand expression))]
+      ;[(eq? (operator expression) '<=) (<= (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '>=) (>= (leftoperand expression) (rightoperand expression))]
       [(eq? (operator expression) '&&) (and (Mboolean (leftoperand expression) state) (Mboolean (rightoperand expression) state))]
       [(eq? (operator expression) '||) (or (Mboolean (leftoperand expression) state) (Mboolean (rightoperand expression) state))]
@@ -164,7 +161,7 @@
 (define ifStatement
   (lambda (condition statement1 statement2 state)
     (cond
-      [(eq? (Mboolean condition state) #t) (Mstate statement1 state)]
+      [(Mboolean condition state) (Mstate statement1 state)]
       [else (Mstate statement2 state)])))
 
 ;(Mvalue_default
