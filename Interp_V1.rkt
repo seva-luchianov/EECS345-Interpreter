@@ -1,28 +1,31 @@
 #lang racket
 
-; (load "lex.scm")
+; Load the parser
 (require "simpleParser.rkt")
 
+; Left operand of an expression (0 X 0)
 (define leftoperand cadr)
+; Operator of an expression (X 0 0)
 (define operator car)
+; Right operand of an expression (0 0 X)
 (define rightoperand caddr)
+; The else statement within an if statement
 (define else
   (lambda (expression)
     (car (cdr (cdr (cdr expression))))))
-    
 
-;not important
-;      [(eq? (car (car (parser filename))) 'var) (declare (car (parser filename)) '((return)))]
-     ; [(eq? (car (car (parser filename))) 'return) (add
-
-
-;input (parser filename)
-;Main
+; The main function. It calls the parser and uses that output to calculate the end state of the input file
+; Param: filename - the name of the text file containing the code to be parsed
+; Return: The return value of the function from the state that it calculated
 (define main
   (lambda (filename)
       (Mstate (parser filename) '((return)))))
 
-;Mstate
+; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
+; without a value
+; Param: expression - the expression of which to generate the new state from
+; Param: state - the old state used to obtain the new state with the given expression
+; Return: The state of the code after the expression
 (define Mstate
   (lambda (expression state)
     (cond
@@ -34,27 +37,21 @@
          [(isBoolOp expression) Mboolean(expression state)]
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
+         [(eq? (operator expression) 'while) (whileStatement (leftoperand expression) (rightoperand expression) state)]
          [(and (eq? (operator expression) 'if) (null? (cdr (cdr (cdr expression))))) (ifStatement (car (cdr expression)) (rightoperand expression) state)]
          [(eq? (operator expression) 'if) (ifelseStatement (car (cdr expression)) (rightoperand expression) (else expression) state)]
-         [(eq? (operator expression) 'while) (whileStatement (car (cdr expression)) (rightoperand expression) state)]
          [(eq? (operator expression) 'return)
           (cond
-            ((isBoolOp (leftoperand expression)) (Mboolean (leftoperand expression) state))
-            ((null? (cdr (cdr expression))) (Mvalue (car (cdr expression)) state))
-            (else (Mvalue (cdr expression) state)))]
+            ((isBoolOp (leftoperand expression)) (get_return_val (Mboolean (leftoperand expression) state)))
+            ((null? (cdr (cdr expression))) (get_return_val (Mvalue (car (cdr expression)) state)))
+            (else (get_return_val(Mvalue (cdr expression) state))))]
          [else state])])))
 
-;help for sublists
-(define hasSublist?
-  (lambda (lis)
-    (cond
-      [(null? lis) #f]
-      [(list? (car lis)) #t]
-      [else (hasSublist? (cdr lis))])))
-
-
-; M_value (<value1> <value2> +, state) = M_value(<value1>, state) + M_value(<value2>, state)
-; This is an example of using abstraction to make the code easier to read and maintain
+; M_value. Obtains the value of an numerical expression. Can do the following operators: +,-,*,/,%,(negation), as well as
+; return the values of declared and assigned variables
+; Param: expression- a numeric expression that you wish to obtain the value of
+; Param: state - the state of the code before the expression.
+; Return: the value of the expression
 (define Mvalue
   (lambda (expression state)
     (cond
@@ -69,6 +66,9 @@
       ((eq? '% (operator expression)) (remainder (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
       (else (error 'badop "The operator is not known")))))
 
+; isValueOp. Returns a boolean indicating whether an expression is a value operation or a numeric expression.
+; Param: expression - the expression of which you want to find if it is numeric or not.
+; Return: a boolean indicatiing whether an expression is a numberic expression.
 (define isValueOp
   (lambda (expression)
     (cond
@@ -81,6 +81,9 @@
       [(eq? '% (operator expression)) #t]
       [else #f])))
 
+; isBoolOp. Returns a boolean indicating whether an expression is a boolean operation or not.
+; Param: expression - the expression of which you want to find if it is a boolean operation.
+; Return: a boolean indicating whether the expression is a boolean operation.
 (define isBoolOp
   (lambda (expression)
     (cond
@@ -99,8 +102,9 @@
       [(eq? '!= (operator expression)) #t]
       [else #f])))
 
-; M_boolean
-; takes a boolean expression and returns the boolean value of that expression
+; Mboolean. Takes a boolean expression and returns the boolean value of that expression.
+; Param: expression - The boolean expression of which you want to obtain the boolean value of
+; Param: state - the state of the code before the boolean expression is evaluated.
 (define Mboolean
   (lambda (expression state)
     (cond
@@ -121,7 +125,10 @@
       [(eq? (operator expression) '!) (not (Mboolean (leftoperand expression) state))]
       [else (error 'badop "the operator is not known")])))
 
-;lookup
+; lookup. Looks for a variable within a state and returns its value if it is found.
+; Param: a - the atom representing the variable that you wish to look up the value of.
+; Param: state- the state for which you will be looking through to obtain the value of the variable a.
+; Return: the value of the variable if it is present within the state or an error if it is not.
 (define lookup
   (lambda (a state)
     (cond
@@ -130,8 +137,12 @@
       [(and (eq? a (car (car state))) (not (null? (cdr (car state))))) (car (cdr (car state)))]
       [else (lookup a (cdr state))])))
 
-;> (declare '(var x) '()) --> '((x))
-;declare
+; declare. Takes an expression and a state and declares a new varible within the state.
+; Param: expression - the expression containing the variable which is being declared.
+; Param: state - the state of the code before the variable declaration.
+; Return: the state of the code after the variable declaration. The new state should include the variable
+; and its value if it was an assignment on the same line. Otherwise if the variable was already declared,
+; this returns an error.
 (define declare
   (lambda (expression state)
     (cond
@@ -139,18 +150,22 @@
       [(not (findfirst* (leftoperand expression) state)) (cons (cons (leftoperand expression) '()) state)]
       [else (error 'alreadydelcared "this variable has alreaday been declared")])))
 
-;declare and assign
+; declareandassign. Takes an expression and a state and declares a variable and assigns a value to it based on the expression.
+; Param: expression - an expression containing both the variable name and the value or expression which becomes a value to assign to the variable
+; within the state
+; Param: state - the state of the code before the declaration and assigning of the variable.
+; Return the state of the code after the declaration and assignment. 
 (define declareandassign
   (lambda (expression state)
     (cond
       [(and (not (findfirst* (operator expression) state)) (isValueOp (leftoperand expression))) (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) state)]
       [(and (not (findfirst* (operator expression) state)) (isBoolOp (leftoperand expression))) (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state) '())) state)]
-      [#t (display expression)])))
+      [else error 'parseError "The parer should have caught this"])))
 
-;notboolean
-
-;> (assign '(x 4) '((x))) --> '((x 4))
-;assign
+; assign. Takes an assignment expression and a state and assigns a value to a variable within the state.
+; Param: assignment - the expression that contains the variable name to be assigned and the value to assign it to.
+; Param: state - the state before the assignment has occured.
+; Return: the state after the variable has been assigned a value based on the assignment expression
 (define assign
   (lambda (assignment state)
     (cond
@@ -158,7 +173,11 @@
       [(findfirst* (operator assignment) state) (add (operator assignment) (Mvalue (leftoperand assignment) state) state)]
       [else (error 'notdeclared "The variable has not yet been declared")])))
 
-;add
+; add. Adds a value to the state at a certain point corresponding to the variable name it is being added to.
+; Param: var - the variable name of which to add the value to.
+; Param; value - the value to be added to the variable name within the state.
+; Param: state - the state before assignment of the variable to the value.
+; Return: the state after the value has been added to the given variable.
 (define add
   (lambda (var value state)
     (cond
@@ -166,9 +185,11 @@
       [(eq? var (car (car state))) (cons (append (cons (car (car state)) '()) (cons value '())) (add var value (cdr state)))]
       [else (cons (car state) (add var value (cdr state)))])))
       
-  
-       
-;findfirst* 
+; findfirst*. Finds the first instance of an atom within a list which could be containing lists. Returns a
+; boolean value as to whether it found the atom or not.
+; Param: a - the atom which you are searching for from within the list.
+; Param: lis - the list which you are searching in to see if the atom a is present.
+; Return: a boolean indicating whether the atom a is within the list or not.
 (define findfirst*
   (lambda (a lis)
     (cond
@@ -176,93 +197,51 @@
       [(eq? a (car (flatten lis))) #t]
       [else (findfirst* a (cdr (flatten lis)))])))
 
-;ifelseStatement
+; ifelseStatement. Handles if-else statements within the code. Checks the condition and decides which path to take.
+; Param: condition - the condition statement which is checked at the start of the if statement.
+; Param statement1 - the statement that is executed if the condition is true.
+; Param statemnet2 - the else statement that is executed if the condition is false.
+; Param state -  the state of the code before the if-else statement.
+; Return: the state of the code after the if-else statement is executed.
 (define ifelseStatement
   (lambda (condition statement1 statement2 state)
     (cond
       [(Mboolean condition state) (Mstate statement1 state)]
       [else (Mstate statement2 state)])))
 
-;ifStatement
+; ifStatement. Handles if statements within the code without an else statement. Checks
+; the condition and evaluates the state after the statement if the condition is true.
+; Param: condition - the condition to check at the start of the if statement to determine
+; if the statment1 will be executed.
+; Param: statement1 - the expression that its state is evaluated if the condition is deemed
+; to be true.
+; Param state - the state of the code before the if statement.
+; Return: the state of the code after the if statement is executed.
 (define ifStatement
   (lambda (condition statement1 state)
     (cond
       [(Mboolean condition state) (Mstate statement1 state)]
       [else state])))
 
-<<<<<<< HEAD
-;while statement
+; whileStatement. Handles while loops within the code. Checks a condition and decides whether to execute the statement
+; based on the value of that condition.
+; Param: condition = the condition that is checked at the start of each iteration of the while loop. Determines if the loop body
+; will be executed.
+; Param: statement - the body of the loop that will only run if the while condition is met
+; Param: state - the state of the code before the while loop is executed.
+; Return: the state of the code after the while loop is executed.
 (define whileStatement
-  (lambda (condition statement1 state)
+  (lambda (condition statement state)
     (cond
-     [(Mboolean condition state) (Mstate (whileStatment statement1 state) state)]
-=======
-(define whileStatement
-  (lambda (condition statement1 state)
-    (cond
-     [(Mboolean condition state) (Mstate (whileStatement statement1 (Mstate statement1 state)) state)]
->>>>>>> 3f07176a9812e0578680ab2f71ff145843a9165e
+     [(Mboolean condition state) (whileStatement condition statement (Mstate statement state))]
      [else state])))
 
-;(Mvalue_default
- ;(lambda (expression state)
-  ; (cond
-   ;  [(= 3 (length expression))
-    ;  ((get_function_for_2_inputs (operator expression))
-     ;                            (Mvalue (leftoperand expression) state)
-      ;                           (Mvalue (rightoperand expression) state))]
-     ;[(= 2 (length expression))
-      ;((get_function_for_2_inputs (operator expression))
-       ;                          (Mvalue (leftoperand expression) state))]
-
-; Pass in the operator atom, and get back the actual function that should be performed
-; The operator must take 2 inputs, otherwise you will get an error
-;(define get_function_for_2_inputs
- ; (lambda (operator)
-  ;  (cond
-   ;   ; Math bois
-    ;  ((eq? operator '+) +)
-     ; ((eq? operator '-) -)
-      ;((eq? operator '/) quotient)
-;      ((eq? operator '*) *)
- ;     ((eq? operator '%) remainder)
-  ;    ; Logic bois
-   ;   ((eq? operator '<) <)
-    ;  ((eq? operator '>) >)
-;     ; ((eq? operator '<=) <=)
- ;     ((eq? operator '>=) >=)
-  ;    ((eq? operator '==) ==)
-   ;   ((eq? operator '!=) !=)
-    ;  ((eq? operator '&&) (lambda (x y) (and x y)))
- ;     ((eq? operator '||) (lambda (x y) (or x y)))
-  ;    ; Might being doing a goof like (+ x) or something
-   ;   (else (error "Unknown operator for 2 inputs")))))
-
-(define get_function_for_1_input
-  (lambda (operator)
-    (cond
-      ((eq? operator '!) not)
-      ; This is ok because this is how negative numbers are parsed
-      ((eq? operator '-) (lambda (x) (- 0 x)))
-      (else (error "Unknown operator for 1 input")))))
-
-; We are supposed to return true / false rather than #t and #f
-; Pass-through if not a bool
+; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type of statement the untouched.
+; Param: expression - the expression that will be changed if it is equal to #f or #t.
+; Return: 'true is the statement was #t, 'false is the statement was #f, and the original expression if it was neither.
 (define get_return_val
   (lambda (expression)
     (cond
       ((eq? expression #t) 'true)
       ((eq? expression #f) 'false)
       (else expression))))
-
-;(define !=
- ; (lambda (x y)
- ; ;  (not (== x y))))
-
-;return sublist
-(define firstSublist
-  (lambda (lis)
-    (cond 
-      ((null? lis) '())
-      ((list? (car lis)) (cons (car lis) (cdr lis)))
-      (else (firstSublist (cdr lis))))))
