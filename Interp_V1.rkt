@@ -36,6 +36,7 @@
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(and (eq? (operator expression) 'if) (null? (cdr (cdr (cdr expression))))) (ifStatement (car (cdr expression)) (rightoperand expression) state)]
          [(eq? (operator expression) 'if) (ifelseStatement (car (cdr expression)) (rightoperand expression) (else expression) state)]
+         [(eq? (operator expression) 'while) (whileStatement (car (cdr expression)) (rightoperand expression) state)]
          [(eq? (operator expression) 'return)
           (cond
             ((isBoolOp (leftoperand expression)) (Mboolean (leftoperand expression) state))
@@ -189,11 +190,18 @@
       [(Mboolean condition state) (Mstate statement1 state)]
       [else state])))
 
+<<<<<<< HEAD
 ;while statement
 (define whileStatement
   (lambda (condition statement1 state)
     (cond
      [(Mboolean condition state) (Mstate (whileStatment statement1 state) state)]
+=======
+(define whileStatement
+  (lambda (condition statement1 state)
+    (cond
+     [(Mboolean condition state) (Mstate (whileStatement statement1 (Mstate statement1 state)) state)]
+>>>>>>> 3f07176a9812e0578680ab2f71ff145843a9165e
      [else state])))
 
 ;(Mvalue_default
