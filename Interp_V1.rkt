@@ -148,7 +148,7 @@
     (cond
       [(and (not (null? (cdr (cdr expression)))) (not (findfirst* (leftoperand expression) state))) (declareandassign (cdr expression) state)]
       [(not (findfirst* (leftoperand expression) state)) (cons (cons (leftoperand expression) '()) state)]
-      [else (error 'alreadydelcared "this variable has alreaday been declared")])))
+      [else (error 'alreadydelcared "this variable has already been declared")])))
 
 ; declareandassign. Takes an expression and a state and declares a variable and assigns a value to it based on the expression.
 ; Param: expression - an expression containing both the variable name and the value or expression which becomes a value to assign to the variable
@@ -160,7 +160,7 @@
     (cond
       [(and (not (findfirst* (operator expression) state)) (isValueOp (leftoperand expression))) (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) state)]
       [(and (not (findfirst* (operator expression) state)) (isBoolOp (leftoperand expression))) (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state) '())) state)]
-      [else error 'parseError "The parer should have caught this"])))
+      [else error 'parseError "The parser should have caught this"])))
 
 ; assign. Takes an assignment expression and a state and assigns a value to a variable within the state.
 ; Param: assignment - the expression that contains the variable name to be assigned and the value to assign it to.
