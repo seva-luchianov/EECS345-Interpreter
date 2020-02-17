@@ -22,8 +22,8 @@
       [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state))]
       [else
        (cond
-         [(isValueOp expression) Mvalue(expression state)]
-         [(eq? (operator expression) 'var) (declare expression state)]
+         [(isValueOp expression) (Mvalue(expression state))]
+         [(eq? (operator expression) 'var) (declare (Mvalue(expression state)) state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'return) (assign (cons (operator expression) (cons (lookup (leftoperand expression) state) '())) state)]
          [else state])])))
@@ -125,10 +125,50 @@
       [(eq? a (car (flatten lis))) #t]
       [else (findfirst* a (cdr (flatten lis)))])))
       
-
-(define leftoperand
-  (lambda (expression)
-    (cadr expression)))
-
+(define leftoperand cadr)
 (define operator car)
 (define rightoperand caddr)
+
+; Pass in the operator atom, and get back the actual function that should be performed
+; The operator must take 2 inputs, otherwise you will get an error
+(define get_function_for_2_inputs
+  (lambda (operator)
+    (cond
+      ; Math bois
+      ((eq? operator '+) +)
+      ((eq? operator '-) -)
+      ((eq? operator '/) quotient)
+      ((eq? operator '*) *)
+      ((eq? operator '%) remainder)
+      ; Logic bois
+      ((eq? operator '<) <)
+      ((eq? operator '>) >)
+      ((eq? operator '<=) <=)
+      ((eq? operator '>=) >=)
+      ((eq? operator '==) ==)
+      ((eq? operator '!=) !=)
+      ((eq? operator '&&) (lambda (x y) (and x y)))
+      ((eq? operator '||) (lambda (x y) (or x y)))
+      ; Might being doing a goof like (+ x) or something
+      (else (error "Unknown operator for 2 inputs")))))
+
+(define get_function_for_1_input
+  (lambda (operator)
+    (cond
+      ((eq? operator '!) not)
+      ; This is ok because this is how negative numbers are parsed
+      ((eq? operator '-) (lambda (x) (- 0 x)))
+      (else (error "Unknown operator for 1 input")))))
+
+; We are supposed to return true / false rather than #t and #f
+; Pass-through if not a bool
+(define get_return_val
+  (lambda (expression)
+    (cond
+      ((eq? expression #t) 'true)
+      ((eq? expression #f) 'false)
+      (else expression))))
+
+(define !=
+  (lambda (x y)
+    (not (== x y))))
