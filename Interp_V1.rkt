@@ -3,6 +3,10 @@
 ; (load "lex.scm")
 (require "simpleParser.rkt")
 
+(define leftoperand cadr)
+(define operator car)
+(define rightoperand caddr)
+
 ;not important
 ;      [(eq? (car (car (parser filename))) 'var) (declare (car (parser filename)) '((return)))]
      ; [(eq? (car (car (parser filename))) 'return) (add
@@ -124,10 +128,17 @@
       [(null? lis) #f]
       [(eq? a (car (flatten lis))) #t]
       [else (findfirst* a (cdr (flatten lis)))])))
-      
-(define leftoperand cadr)
-(define operator car)
-(define rightoperand caddr)
+
+(Mvalue_default
+ (lambda (expression state)
+   (cond
+     [(= 3 (length expression))
+      ((get_function_for_2_inputs (operator expression))
+                                 (Mvalue (leftoperand expression) state)
+                                 (Mvalue (rightoperand expression) state))]
+     [(= 2 (length expression))
+      ((get_function_for_2_inputs (operator expression))
+                                 (Mvalue (leftoperand expression) state))]
 
 ; Pass in the operator atom, and get back the actual function that should be performed
 ; The operator must take 2 inputs, otherwise you will get an error
