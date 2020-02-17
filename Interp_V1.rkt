@@ -190,7 +190,6 @@
       [(Mboolean condition state) (Mstate statement1 state)]
       [else state])))
 
-<<<<<<< HEAD
 ;while statement
 (define whileStatement
   (lambda (condition statement1 state)
