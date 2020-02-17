@@ -58,6 +58,7 @@
       ((null? expression) (error 'parser "parser should have caught this"))
       ((number? expression) expression)
       ((and (not (number? expression)) (not (list? expression))) (lookup expression state))
+      [(and (eq? '- (operator expression)) (null? (cdr (cdr expression)))) (* -1 (Mvalue(leftoperand expression) state))]
       ((eq? '+ (operator expression)) (+ (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
       ((eq? '- (operator expression)) (- (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
       ((eq? '* (operator expression)) (* (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
