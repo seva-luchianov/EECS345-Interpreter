@@ -178,7 +178,7 @@
 (define whileStatement
   (lambda (condition statement1 state)
     (cond
-     [(Mboolean condition state) (Mstate (whileStatement statement1 (Mstate statement1 state)) state)]
+     [(Mboolean condition state) (Mstate (whileStatement condition statement1 (Mstate statement1 state)) state)]
      [else state])))
 
 ;(Mvalue_default
