@@ -1,0 +1,46 @@
+var x = 100 % 2 == 0;
+var y = 10 >= 20;
+var z;
+if (x || y)
+  z = y;
+else
+  z = x;
+if (z && x)
+  z = !z;
+return z;
+should return false
+
+var x = 5;
+var y = 6;
+if (x == y)
+  x = 10;
+x = y * y;
+var z = y * 2;
+z = x + y;
+return z;
+Should return 42
+
+var x = 3;
+var y = 9;
+var z = y % x;
+var v = x + y + z;
+return v;
+Should return 12
+
+var x = 12;
+var y = (x < 13) || (x + 3 == 12) && false;
+return y;
+Should return true;
+
+var x = 10;
+var y = 0;
+while (y < x * 5)
+   y = x + y;
+return y;
+Should return 50;
+
+var x = 10;
+var y = 15;
+var z = (x + y) / 5;
+return z + (x * y);
+Should return 155;
