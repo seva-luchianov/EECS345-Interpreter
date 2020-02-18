@@ -43,9 +43,9 @@
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (whileStatement (leftoperand expression) (rightoperand expression) state)]
          [(eq? (operator expression) 'if)
-          (if (hasElseStatement expression)
-              (ifElseStatement (leftoperand expression) (rightoperand expression) (thirdOperand expression) state)
-              (ifStatement (leftoperand expression) (rightoperand expression) state))]
+          (if (doesNotHaveElseStatement expression)
+              (ifStatement (leftoperand expression) (rightoperand expression) state)
+              (ifElseStatement (leftoperand expression) (rightoperand expression) (thirdOperand expression) state))]
          [(eq? (operator expression) 'return)
           (cond
             [(isBoolOp (leftoperand expression)) (get_return_val (Mboolean (leftoperand expression) state))]
@@ -53,7 +53,7 @@
             [else (get_return_val(Mvalue (cdr expression) state))])]
          [else state])])))
 
-(define hasElseStatement
+(define doesNotHaveElseStatement
   (lambda (expression)
     (null? (cdr (cdr (cdr expression))))))
 
