@@ -14,12 +14,16 @@
   (lambda (expression)
     (car (cdr (cdr (cdr expression))))))
 
+(define initState
+  (lambda ()
+    '((return))))
+
 ; The main function. It calls the parser and uses that output to calculate the end state of the input file
 ; Param: filename - the name of the text file containing the code to be parsed
 ; Return: The return value of the function from the state that it calculated
 (define main
   (lambda (filename)
-      (Mstate (parser filename) '((return)))))
+      (Mstate (parser filename) (initState))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
@@ -61,16 +65,16 @@
 (define Mvalue
   (lambda (expression state)
     (cond
-      ((null? expression) (error 'parser "parser should have caught this"))
-      ((number? expression) expression)
-      ((and (not (number? expression)) (not (list? expression))) (lookup expression state))
+      [(null? expression) (error 'parser "parser should have caught this")]
+      [(number? expression) expression]
+      [(and (not (number? expression)) (not (list? expression))) (lookup expression state)]
       [(and (eq? '- (operator expression)) (null? (cdr (cdr expression)))) (* -1 (Mvalue(leftoperand expression) state))]
-      ((eq? '+ (operator expression)) (+ (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
-      ((eq? '- (operator expression)) (- (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
-      ((eq? '* (operator expression)) (* (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
-      ((eq? '/ (operator expression)) (quotient (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
-      ((eq? '% (operator expression)) (remainder (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state)))
-      (else (error 'badop "The operator is not known")))))
+      [(eq? '+ (operator expression)) (+ (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
+      [(eq? '- (operator expression)) (- (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
+      [(eq? '* (operator expression)) (* (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
+      [(eq? '/ (operator expression)) (quotient (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
+      [(eq? '% (operator expression)) (remainder (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
+      [else (error 'badop "The operator is not known")])))
 
 ; isValueOp. Returns a boolean indicating whether an expression is a value operation or a numeric expression.
 ; Param: expression - the expression of which you want to find if it is numeric or not.
@@ -117,8 +121,6 @@
       [(null? expression) '()]
       [(eq? expression 'true) #t]
       [(eq? expression 'false) #f]
-      ;[(isValueOp expression) (Mvalue expression state)]
-      ;[(or (and (not (isBoolOp (leftoperand expression))) (not (isValueOp (leftoperand expression)))) (and (not (isBoolOp (rightoperand expression))) (not (isValueOp (leftoperand expression))))) (Mboolean (cons (operator expression) (cons (lookup (leftoperand expression) state) (cons (lookup (rightoperand expression) state) '()))) state)]
       [(and (not (list? expression)) (not (isValueOp expression))) (lookup expression state)]
       [(eq? (operator expression) '==) (= (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
       [(eq? (operator expression) '<) (< (Mvalue (leftoperand expression) state) (Mvalue (rightoperand expression) state))]
