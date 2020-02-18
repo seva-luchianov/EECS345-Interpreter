@@ -10,7 +10,7 @@
 ; Right operand of an expression (0 0 X)
 (define rightoperand caddr)
 ; The else statement within an if statement
-(define else
+(define thirdOperand
   (lambda (expression)
     (car (cdr (cdr (cdr expression))))))
 
@@ -38,14 +38,20 @@
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (whileStatement (leftoperand expression) (rightoperand expression) state)]
-         [(and (eq? (operator expression) 'if) (null? (cdr (cdr (cdr expression))))) (ifStatement (car (cdr expression)) (rightoperand expression) state)]
-         [(eq? (operator expression) 'if) (ifelseStatement (car (cdr expression)) (rightoperand expression) (else expression) state)]
+         [(eq? (operator expression) 'if)
+          (if (hasElseStatement expression)
+              (ifElseStatement (leftoperand expression) (rightoperand expression) (thirdOperand expression) state)
+              (ifStatement (leftoperand expression) (rightoperand expression) state))]
          [(eq? (operator expression) 'return)
           (cond
-            ((isBoolOp (leftoperand expression)) (get_return_val (Mboolean (leftoperand expression) state)))
-            ((null? (cdr (cdr expression))) (get_return_val (Mvalue (car (cdr expression)) state)))
-            (else (get_return_val(Mvalue (cdr expression) state))))]
+            [(isBoolOp (leftoperand expression)) (get_return_val (Mboolean (leftoperand expression) state))]
+            [(null? (cdr (cdr expression))) (get_return_val (Mvalue (car (cdr expression)) state))]
+            [else (get_return_val(Mvalue (cdr expression) state))])]
          [else state])])))
+
+(define hasElseStatement
+  (lambda (expression)
+    (null? (cdr (cdr (cdr expression))))))
 
 ; M_value. Obtains the value of an numerical expression. Can do the following operators: +,-,*,/,%,(negation), as well as
 ; return the values of declared and assigned variables
@@ -197,13 +203,13 @@
       [(eq? a (car (flatten lis))) #t]
       [else (findfirst* a (cdr (flatten lis)))])))
 
-; ifelseStatement. Handles if-else statements within the code. Checks the condition and decides which path to take.
+; ifElseStatement. Handles if-else statements within the code. Checks the condition and decides which path to take.
 ; Param: condition - the condition statement which is checked at the start of the if statement.
 ; Param statement1 - the statement that is executed if the condition is true.
 ; Param statemnet2 - the else statement that is executed if the condition is false.
 ; Param state -  the state of the code before the if-else statement.
 ; Return: the state of the code after the if-else statement is executed.
-(define ifelseStatement
+(define ifElseStatement
   (lambda (condition statement1 statement2 state)
     (cond
       [(Mboolean condition state) (Mstate statement1 state)]
@@ -242,6 +248,6 @@
 (define get_return_val
   (lambda (expression)
     (cond
-      ((eq? expression #t) 'true)
-      ((eq? expression #f) 'false)
-      (else expression))))
+      [(eq? expression #t) 'true]
+      [(eq? expression #f) 'false]
+      [else expression])))
