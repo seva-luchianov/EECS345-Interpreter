@@ -23,7 +23,8 @@
 ; Return: The return value of the function from the state that it calculated
 (define main
   (lambda (filename)
-      (Mstate (parser filename) (initState))))
+    ;(parser filename)))
+    (Mstate (parser filename) (initState))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
@@ -42,6 +43,7 @@
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (whileStatement (leftoperand expression) (rightoperand expression) state)]
+         [(eq? (operator expression) 'begin) (Mstate (cddr expression) (Mstate (cadr expression) state))]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
               (ifStatement (leftoperand expression) (rightoperand expression) state)
@@ -253,3 +255,11 @@
       [(eq? expression #t) 'true]
       [(eq? expression #f) 'false]
       [else expression])))
+
+
+
+
+
+(define try_block cadr)
+(define catch_block caddr)
+(define finally_block cadddr)
