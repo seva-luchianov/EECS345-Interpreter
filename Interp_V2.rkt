@@ -6,6 +6,11 @@
 
 #lang racket
 
+;add layer
+(define addLayer
+  (lambda (state)
+    (append (initState) state)))
+
 ; Load the parser
 (require "simpleParser.rkt")
 
@@ -26,7 +31,7 @@
 ; Returns the initial state
 (define initState
   (lambda ()
-    '((return))))
+    '(((return)))))
 
 ; The interpret main function. It calls the parser and uses that output to calculate the end state of the
 ; input file
@@ -44,7 +49,7 @@
 (define Mstate
   (lambda (expression state type)
     (cond
-      [(null? expression) state]
+      [(null? expression) state] 
       [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state 'none) 'none)]
       [else
        (cond
@@ -54,7 +59,7 @@
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (whileStatement (leftoperand expression)
                                                              (rightoperand expression) state)]
-         [(eq? (operator expression) 'begin) (Mstate (cdr expression) state 'none)]
+         [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) 'begin))]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
               (ifStatement (leftoperand expression) (rightoperand expression) state)
@@ -77,7 +82,7 @@
     (cond
       [(null? expression) (error 'parser "parser should have caught this")]
       [(number? expression) expression]
-      [(and (not (number? expression)) (not (list? expression))) (lookup expression state)]
+      [(and (not (number? expression)) (not (list? expression))) (getLookupValue expression state)]
       [(and (eq? '- (operator expression)) (null? (cdr (cdr expression))))
        (* -1 (Mvalue(leftoperand expression) state))]
       [(eq? '+ (operator expression)) (+ (Mvalue (leftoperand expression) state)
@@ -101,7 +106,7 @@
       [(null? expression) '()]
       [(eq? expression 'true) #t]
       [(eq? expression 'false) #f]
-      [(and (not (list? expression)) (not (isValueOp expression))) (lookup expression state)]
+      [(and (not (list? expression)) (not (isValueOp expression))) (getLookupValue expression state)]
       [(eq? (operator expression) '==) (= (Mvalue (leftoperand expression) state)
                                           (Mvalue (rightoperand expression) state))]
       [(eq? (operator expression) '<) (< (Mvalue (leftoperand expression) state)
@@ -129,10 +134,21 @@
   (lambda (a state)
     (cond
       [(number? a) a]
-      [(null? state)
-       (error 'notdeclared "the variable that you are trying to use is not yet declared or assigned")]
+      [(null? state) '()]
       [(and (eq? a (car (car state))) (not (null? (cdr (car state))))) (car (cdr (car state)))]
       [else (lookup a (cdr state))])))
+
+(define LayerLookup
+  (lambda (a state)
+    (cond
+      [(null? state) '()]
+      [else (cons (lookup a (car state)) (LayerLookup a (cdr state)))])))
+
+(define getLookupValue
+  (lambda (a state)
+    (cond
+      [(null? (flatten (LayerLookup a state))) (error "variable for lookup not assigned or declared in any layer")]
+      [(car (flatten (LayerLookup a state)))])))
 
 ; declare. Takes an expression and a state and declares a new varible within the state.
 ; Param: expression - the expression containing the variable which is being declared.
@@ -158,7 +174,7 @@
   (lambda (expression state)
     (cond
       [(and (not (findfirst* (operator expression) state)) (isValueOp (leftoperand expression)))
-       (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) state)]
+       (append (cons (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) (car state)) '()) (cdr state))]
       [(and (not (findfirst* (operator expression) state)) (isBoolOp (leftoperand expression)))
        (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state) '())) state)]
       [(findfirst* (leftoperand expression) state) (declareandassign (cons (operator expression) (cons (Mvalue (leftoperand expression) state) '())) state)]
@@ -173,7 +189,7 @@
   (lambda (assignment state)
     (cond
       [(null? assignment) state]
-      [(findfirst* (operator assignment) state) (add (operator assignment)
+      [(findfirst* (operator assignment) state) (addWithLayers (operator assignment)
                                                      (Mvalue (leftoperand assignment) state) state)]
       [else (error 'notdeclared "The variable has not yet been declared")])))
 
@@ -189,6 +205,13 @@
       [(eq? var (car (car state))) (cons (append (cons (car (car state)) '()) (cons value '()))
                                          (add var value (cdr state)))]
       [else (cons (car state) (add var value (cdr state)))])))
+
+(define addWithLayers
+  (lambda (var value state)
+    (cond
+      [(null? state) '()]
+      [(cons (add var value (car state)) (addWithLayers var value (cdr state)))]
+      [else (display "why")])))
       
 ; findfirst*. Finds the first instance of an atom within a list which could be containing lists.
 ; Returns a boolean value as to whether it found the atom or not.
@@ -295,3 +318,11 @@
       [(eq? expression #t) 'true]
       [(eq? expression #f) 'false]
       [else expression])))
+
+;remove all but global layer
+(define popLayer
+  (lambda (state)
+    (cond
+      [(null? state) '()]
+      [(null? (cdr state)) state]
+      [else (cdr state)])))
