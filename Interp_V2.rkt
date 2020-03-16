@@ -39,26 +39,19 @@
 ; Return: The return value of the function from the state that it calculated
 (define interpret
   (lambda (filename)
-      (Mstate (parser filename) (initState) 'none)))
-
-
-(define Mstate
-  (lambda (expression state type)
-    (call/cc
-     (lambda (break)
-       (Mstate-break expression state type break)))))
+      (call/cc (lambda (k) (Mstate (parser filename) (initState) k)))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
 ; Param: expression - the expression of which to generate the new state from
 ; Param: state - the old state used to obtain the new state with the given expression
 ; Return: The state of the code after the expression
-(define Mstate-break
-  (lambda (expression state type break)
+(define Mstate
+  (lambda (expression state break)
     (cond
       [(null? expression) state]
       [(number? state) state]
-      [(list? (car expression)) (Mstate (cdr expression) (Mstate-break (car expression) state 'none break) 'none)]
+      [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state break) break)]
       [else
        (cond
          [(isValueOp expression) Mvalue(expression state)]
@@ -67,7 +60,7 @@
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (whileStatement (leftoperand expression)
                                                              (rightoperand expression) state)]
-         [(eq? (operator expression) 'begin) (popLayer (Mstate-break (cdr expression) (addLayer state) 'begin break))]
+         [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) break))]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
               (ifStatement (leftoperand expression) (rightoperand expression) state)
@@ -288,8 +281,8 @@
 (define ifElseStatement
   (lambda (condition statement1 statement2 state)
     (cond
-      [(Mboolean condition state) (Mstate statement1 state 'none)]
-      [else (Mstate statement2 state 'none)])))
+      [(Mboolean condition state) (call/cc (lambda (k) (Mstate statement1 state k)))]
+      [else (call/cc (lambda (k) (Mstate statement2 state k)))])))
 
 ; ifStatement. Handles if statements within the code without an else statement. Checks
 ; the condition and evaluates the state after the statement if the condition is true.
@@ -302,7 +295,7 @@
 (define ifStatement
   (lambda (condition statement1 state)
     (cond
-      [(Mboolean condition state) (Mstate statement1 state 'none)]
+      [(Mboolean condition state) (call/cc (lambda (k) (Mstate statement1 state k)))]
       [else state])))
 
 ; whileStatement. Handles while loops within the code. Checks a condition and decides whether to execute the
@@ -315,7 +308,7 @@
 (define whileStatement
   (lambda (condition statement state)
     (cond
-     [(Mboolean condition state) (whileStatement condition statement (Mstate statement state 'none))]
+     [(Mboolean condition state) (whileStatement condition statement (call/cc (lambda (k) (Mstate statement state k))))]
      [else state])))
 
 ; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type
