@@ -56,17 +56,18 @@
        (cond
          [(isValueOp expression) Mvalue(expression state)]
          [(isBoolOp expression) Mboolean(expression state)]
+         [(eq? (operator expression) 'break) (break state)]
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
-         [(eq? (operator expression) 'while) (whileStatement (leftoperand expression)
-                                                             (rightoperand expression) state)]
+         [(eq? (operator expression) 'while) (call/cc (lambda (x) (whileStatement (leftoperand expression)
+                                                             (rightoperand expression) state x)))]
          [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) break))]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
               (ifStatement (leftoperand expression) (rightoperand expression) state)
               (ifElseStatement (leftoperand expression) (rightoperand expression)
                                (thirdOperand expression) state))]
-         [(eq? (operator expression) 'continue) (break state)]
+         [(eq? (operator expression) 'continue) (break expression)]
          [(eq? (operator expression) 'break) (break state)]
          [(eq? (operator expression) 'return)
           (cond
@@ -306,9 +307,10 @@
 ; Param: state - the state of the code before the while loop is executed.
 ; Return: the state of the code after the while loop is executed.
 (define whileStatement
-  (lambda (condition statement state)
+  (lambda (condition statement state break)
     (cond
-     [(Mboolean condition state) (whileStatement condition statement (call/cc (lambda (k) (Mstate statement state k))))]
+     ;[(eq? statement 'break) (break state)]
+     [(Mboolean condition state) (whileStatement condition statement (Mstate statement state break) break)]
      [else state])))
 
 ; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type
