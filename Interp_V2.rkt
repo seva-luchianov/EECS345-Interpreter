@@ -41,16 +41,24 @@
   (lambda (filename)
       (Mstate (parser filename) (initState) 'none)))
 
+
+(define Mstate
+  (lambda (expression state type)
+    (call/cc
+     (lambda (break)
+       (Mstate-break expression state type break)))))
+
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
 ; Param: expression - the expression of which to generate the new state from
 ; Param: state - the old state used to obtain the new state with the given expression
 ; Return: The state of the code after the expression
-(define Mstate
-  (lambda (expression state type)
+(define Mstate-break
+  (lambda (expression state type break)
     (cond
-      [(null? expression) state] 
-      [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state 'none) 'none)]
+      [(null? expression) state]
+      [(number? state) state]
+      [(list? (car expression)) (Mstate (cdr expression) (Mstate-break (car expression) state 'none break) 'none)]
       [else
        (cond
          [(isValueOp expression) Mvalue(expression state)]
@@ -59,17 +67,19 @@
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (whileStatement (leftoperand expression)
                                                              (rightoperand expression) state)]
-         [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) 'begin))]
+         [(eq? (operator expression) 'begin) (popLayer (Mstate-break (cdr expression) (addLayer state) 'begin break))]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
               (ifStatement (leftoperand expression) (rightoperand expression) state)
               (ifElseStatement (leftoperand expression) (rightoperand expression)
                                (thirdOperand expression) state))]
+         [(eq? (operator expression) 'continue) (break state)]
+         [(eq? (operator expression) 'break) (break state)]
          [(eq? (operator expression) 'return)
           (cond
-            [(isBoolOp (leftoperand expression)) (get_return_val (Mboolean (leftoperand expression) state))]
-            [(null? (cdr (cdr expression))) (get_return_val (Mvalue (car (cdr expression)) state))]
-            [else (get_return_val(Mvalue (cdr expression) state))])]
+            [(isBoolOp (leftoperand expression)) (break (get_return_val (Mboolean (leftoperand expression) state)))]
+            [(null? (cdr (cdr expression))) (break (get_return_val (Mvalue (car (cdr expression)) state)))]
+            [else (break (get_return_val(Mvalue (cdr expression) state)))])]
          [else state])])))
 
 ; M_value. Obtains the value of an numerical expression. Can do the following operators: +,-,*,/,%,(negation),
@@ -142,6 +152,7 @@
   (lambda (a state)
     (cond
       [(null? state) '()]
+      [(number? state) state]
       [else (cons (lookup a (car state)) (LayerLookup a (cdr state)))])))
 
 (define getLookupValue
@@ -324,5 +335,6 @@
   (lambda (state)
     (cond
       [(null? state) '()]
+      [(number? state) state]
       [(null? (cdr state)) state]
       [else (cdr state)])))
