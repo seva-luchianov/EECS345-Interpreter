@@ -57,7 +57,7 @@
          [(isValueOp expression) Mvalue(expression state)]
          [(isBoolOp expression) Mboolean(expression state)]
          [(and (eq? (operator expression) 'break) (eq? in-begin #t)) (break-cont (popLayer state))]
-         [(and (eq? (operator expression) 'break) (eq? in-begin #f)) (error 'break-outside-block "Break outside block statement")]
+         [(or (and (eq? (operator expression) 'break) (eq? in-begin #f)) (and (eq? (operator expression) 'continue) (eq? in-begin #f))) (error 'break-outside-block "Break or continue outside of loop body")]
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (call/cc (lambda (x) (whileStatement (leftoperand expression)
