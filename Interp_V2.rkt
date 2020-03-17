@@ -31,7 +31,7 @@
 ; Returns the initial state
 (define initState
   (lambda ()
-    '(((return)))))
+    '(())))
 
 ; The interpret main function. It calls the parser and uses that output to calculate the end state of the
 ; input file
@@ -154,7 +154,7 @@
   (lambda (a state)
     (cond
       [(null? (flatten (LayerLookup a state))) (error "variable for lookup not assigned or declared in any layer")]
-      [(car (flatten (LayerLookup a state)))])))
+      [else (car (flatten (LayerLookup a state)))])))
 
 ; declare. Takes an expression and a state and declares a new varible within the state.
 ; Param: expression - the expression containing the variable which is being declared.
@@ -167,7 +167,7 @@
     (cond
       [(and (not (null? (cdr (cdr expression)))) (not (findfirst* (leftoperand expression) state)))
        (declareandassign (cdr expression) state)]
-      [(not (findfirst* (leftoperand expression) state)) (cons (cons (leftoperand expression) '()) state)]
+      [(not (findfirst* (leftoperand expression) state)) (cons (cons (cons (leftoperand expression) '()) (car state)) '())]
       [else (error 'alreadydelcared "this variable has already been declared")])))
 
 ; declareandassign. Takes an expression and a state and declares a variable and assigns a value to
@@ -182,7 +182,7 @@
       [(and (not (findfirst* (operator expression) state)) (isValueOp (leftoperand expression)))
        (append (cons (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) (car state)) '()) (cdr state))]
       [(and (not (findfirst* (operator expression) state)) (isBoolOp (leftoperand expression)))
-       (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state) '())) state)]
+       (append (cons (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state) '())) (car state)) '()) (cdr state))]
       [(findfirst* (leftoperand expression) state) (declareandassign (cons (operator expression) (cons (Mvalue (leftoperand expression) state) '())) state)]
       [else error 'parseError "The parser should have caught this"])))
 
@@ -208,6 +208,7 @@
   (lambda (var value state)
     (cond
       [(or (or (null? var) (null? value)) (null? state)) state]
+      [(null? (car state)) state]
       [(eq? var (car (car state))) (cons (append (cons (car (car state)) '()) (cons value '()))
                                          (add var value (cdr state)))]
       [else (cons (car state) (add var value (cdr state)))])))
@@ -227,7 +228,7 @@
 (define findfirst*
   (lambda (a lis)
     (cond
-      [(null? lis) #f]
+      [(null? (flatten lis)) #f]
       [(eq? a (car (flatten lis))) #t]
       [else (findfirst* a (cdr (flatten lis)))])))
 
