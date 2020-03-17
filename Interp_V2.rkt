@@ -64,9 +64,9 @@
          [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) break-cont cont-cont))]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
-              (ifStatement (leftoperand expression) (rightoperand expression) state)
+              (ifStatement (leftoperand expression) (rightoperand expression) state break-cont cont-cont)
               (ifElseStatement (leftoperand expression) (rightoperand expression)
-                               (thirdOperand expression) state))]
+                               (thirdOperand expression) state break-cont cont-cont))]
          [(eq? (operator expression) 'continue) (cont-cont state)]
          [(eq? (operator expression) 'break) (break-cont state)]
          [(eq? (operator expression) 'return)
@@ -280,10 +280,10 @@
 ; Param state -  the state of the code before the if-else statement.
 ; Return: the state of the code after the if-else statement is executed.
 (define ifElseStatement
-  (lambda (condition statement1 statement2 state)
+  (lambda (condition statement1 statement2 state break-cont cont-cont)
     (cond
-      [(Mboolean condition state) (call/cc (lambda (k) (Mstate statement1 state k (lambda (v) v))))]
-      [else (call/cc (lambda (k) (Mstate statement2 state k (lambda (v) v))))])))
+      [(Mboolean condition state) (Mstate statement1 state break-cont cont-cont)]
+      [else (Mstate statement2 state break-cont cont-cont)])))
 
 ; ifStatement. Handles if statements within the code without an else statement. Checks
 ; the condition and evaluates the state after the statement if the condition is true.
@@ -294,9 +294,9 @@
 ; Param state - the state of the code before the if statement.
 ; Return: the state of the code after the if statement is executed.
 (define ifStatement
-  (lambda (condition statement1 state)
+  (lambda (condition statement1 state break-cont cont-cont)
     (cond
-      [(Mboolean condition state) (call/cc (lambda (k) (Mstate statement1 state k (lambda (v) v))))]
+      [(Mboolean condition state) (Mstate statement1 state break-cont cont-cont)]
       [else state])))
 
 ; whileStatement. Handles while loops within the code. Checks a condition and decides whether to execute the
