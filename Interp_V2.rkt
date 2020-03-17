@@ -39,7 +39,7 @@
 ; Return: The return value of the function from the state that it calculated
 (define interpret
   (lambda (filename)
-      (call/cc (lambda (k) (Mstate (parser filename) (initState) k (lambda (v) v))))))
+      (call/cc (lambda (k) (Mstate (parser filename) (initState) #f k (lambda (v) v))))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
@@ -47,21 +47,22 @@
 ; Param: state - the old state used to obtain the new state with the given expression
 ; Return: The state of the code after the expression
 (define Mstate
-  (lambda (expression state break-cont cont-cont)
+  (lambda (expression state in-begin break-cont cont-cont)
     (cond
       [(null? expression) state]
       [(number? state) state]
-      [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state break-cont cont-cont) break-cont cont-cont)]
+      [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state #f break-cont cont-cont) #f break-cont cont-cont)]
       [else
        (cond
          [(isValueOp expression) Mvalue(expression state)]
          [(isBoolOp expression) Mboolean(expression state)]
-         [(eq? (operator expression) 'break) (break-cont state)]
+         [(and (eq? (operator expression) 'break) (eq? in-begin #t)) (break-cont (popLayer state))]
+         [(and (eq? (operator expression) 'break) (eq? in-begin #f)) (error 'break-outside-block "Break outside block statement")]
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (call/cc (lambda (x) (whileStatement (leftoperand expression)
                                                              (rightoperand expression) state x)))]
-         [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) break-cont cont-cont))]
+         [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) #t break-cont cont-cont))]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
               (ifStatement (leftoperand expression) (rightoperand expression) state break-cont cont-cont)
@@ -282,8 +283,8 @@
 (define ifElseStatement
   (lambda (condition statement1 statement2 state break-cont cont-cont)
     (cond
-      [(Mboolean condition state) (Mstate statement1 state break-cont cont-cont)]
-      [else (Mstate statement2 state break-cont cont-cont)])))
+      [(Mboolean condition state) (Mstate statement1 state #t break-cont cont-cont)]
+      [else (Mstate statement2 state #t break-cont cont-cont)])))
 
 ; ifStatement. Handles if statements within the code without an else statement. Checks
 ; the condition and evaluates the state after the statement if the condition is true.
@@ -296,7 +297,7 @@
 (define ifStatement
   (lambda (condition statement1 state break-cont cont-cont)
     (cond
-      [(Mboolean condition state) (Mstate statement1 state break-cont cont-cont)]
+      [(Mboolean condition state) (Mstate statement1 state #t break-cont cont-cont)]
       [else state])))
 
 ; whileStatement. Handles while loops within the code. Checks a condition and decides whether to execute the
@@ -310,7 +311,7 @@
   (lambda (condition statement state break)
     (cond
      ;[(eq? statement 'break) (break state)]
-     [(Mboolean condition state) (whileStatement condition statement (call/cc (lambda (k) (Mstate statement state break k))) break)]
+     [(Mboolean condition state) (whileStatement condition statement (call/cc (lambda (k) (Mstate statement state #t break k))) break)]
      [else state])))
 
 ; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type
