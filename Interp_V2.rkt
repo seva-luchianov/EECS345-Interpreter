@@ -70,7 +70,7 @@
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
          [(eq? (operator expression) 'continue) ((getContinueCont continuations) (popLayer state))]
          [(eq? (operator expression) 'throw) ((getThrowCont continuations) (cadr expression))]
-         [(eq? (operator expression) 'var) (declare expression state)]
+         [(eq? (operator expression) 'var) (declare expression state continuations)]
          [(eq? (operator expression) '=) (assign (cdr expression) state continuations)]
          [(eq? (operator expression) 'while) (call/cc (lambda (break-cont) (whileStatement
                                                                             (leftoperand expression)
@@ -96,17 +96,17 @@
 ; continuation helpers
 ; used so that the function signature for Mstate and all helpers just takes in a single continuations parameter
 (define generateContinuations
-  (lambda ()
+  (lambda () 
     ; return-cont (Should never be invalid so this will always be override right now)
-    (lambda (v) ('error "Invalid return statement"))
-    ; break-cont
-    (lambda (v) ('error "Invalid break statement"))
-    ; continue-cont
-    (lambda (v) ('error "Invalid continue statement"))
-    ; throw-cont
-    (lambda (v) ('error v))
-    ; default finally-cont is null
-    null))
+    (cons (lambda (v) ('error "Invalid return statement"))
+          ; break-cont
+          (cons (lambda (v) ('error "Invalid break statement"))
+                ; continue-cont
+                (cons (lambda (v) ('error "Invalid continue statement"))
+                      ; throw-cont
+                      (cons (lambda (v) ('error v))
+                            ; default finally-cont is null
+                            (cons null '())))))))
 
 (define pushFinallyContinuation
   (lambda (continuations finally-cont)
@@ -158,19 +158,19 @@
     (cond
       [(null? expression) ((getThrowCont continuations) "parser should have caught this")]
       [(number? expression) expression]
-      [(and (not (number? expression)) (not (list? expression))) (getLookupValue expression state)]
+      [(and (not (number? expression)) (not (list? expression))) (getLookupValue expression state continuations)]
       [(and (eq? '- (operator expression)) (null? (cdr (cdr expression))))
-       (* -1 (Mvalue(leftoperand expression) state))]
-      [(eq? '+ (operator expression)) (+ (Mvalue (leftoperand expression) state)
-                                         (Mvalue (rightoperand expression) state))]
-      [(eq? '- (operator expression)) (- (Mvalue (leftoperand expression) state)
-                                         (Mvalue (rightoperand expression) state))]
-      [(eq? '* (operator expression)) (* (Mvalue (leftoperand expression) state)
-                                         (Mvalue (rightoperand expression) state))]
-      [(eq? '/ (operator expression)) (quotient (Mvalue (leftoperand expression) state)
-                                                (Mvalue (rightoperand expression) state))]
-      [(eq? '% (operator expression)) (remainder (Mvalue (leftoperand expression) state)
-                                                 (Mvalue (rightoperand expression) state))]
+       (* -1 (Mvalue(leftoperand expression) state continuations))]
+      [(eq? '+ (operator expression)) (+ (Mvalue (leftoperand expression) state continuations)
+                                         (Mvalue (rightoperand expression) state continuations))]
+      [(eq? '- (operator expression)) (- (Mvalue (leftoperand expression) state continuations)
+                                         (Mvalue (rightoperand expression) state continuations))]
+      [(eq? '* (operator expression)) (* (Mvalue (leftoperand expression) state continuations)
+                                         (Mvalue (rightoperand expression) state continuations))]
+      [(eq? '/ (operator expression)) (quotient (Mvalue (leftoperand expression) state continuations)
+                                                (Mvalue (rightoperand expression) state continuations))]
+      [(eq? '% (operator expression)) (remainder (Mvalue (leftoperand expression) state continuations)
+                                                 (Mvalue (rightoperand expression) state continuations))]
       [else ((getThrowCont continuations) "The operator is not known")])))
 
 ; Mboolean. Takes a boolean expression and returns the boolean value of that expression.
@@ -182,24 +182,24 @@
       [(null? expression) '()]
       [(eq? expression 'true) #t]
       [(eq? expression 'false) #f]
-      [(and (not (list? expression)) (not (isValueOp expression))) (getLookupValue expression state)]
-      [(eq? (operator expression) '==) (= (Mvalue (leftoperand expression) state)
-                                          (Mvalue (rightoperand expression) state))]
-      [(eq? (operator expression) '<) (< (Mvalue (leftoperand expression) state)
-                                         (Mvalue (rightoperand expression) state))]
-      [(eq? (operator expression) '>) (> (Mvalue (leftoperand expression) state)
-                                         (Mvalue (rightoperand expression)state))]
-      [(eq? (operator expression) '!=) (not (= (Mvalue (leftoperand expression) state)
-                                               (Mvalue (rightoperand expression) state)))]
-      [(eq? (operator expression) '<=) (<= (Mvalue (leftoperand expression) state)
-                                           (Mvalue (rightoperand expression) state))]
-      [(eq? (operator expression) '>=) (>= (Mvalue (leftoperand expression) state)
-                                           (Mvalue (rightoperand expression) state))]
-      [(eq? (operator expression) '&&) (and (Mboolean (leftoperand expression) state)
-                                            (Mboolean (rightoperand expression) state))]
-      [(eq? (operator expression) '||) (or (Mboolean (leftoperand expression) state)
-                                           (Mboolean (rightoperand expression) state))]
-      [(eq? (operator expression) '!) (not (Mboolean (leftoperand expression) state))]
+      [(and (not (list? expression)) (not (isValueOp expression))) (getLookupValue expression state continuations)]
+      [(eq? (operator expression) '==) (= (Mvalue (leftoperand expression) state continuations)
+                                          (Mvalue (rightoperand expression) state continuations))]
+      [(eq? (operator expression) '<) (< (Mvalue (leftoperand expression) state continuations)
+                                         (Mvalue (rightoperand expression) state continuations))]
+      [(eq? (operator expression) '>) (> (Mvalue (leftoperand expression) state continuations)
+                                         (Mvalue (rightoperand expression) state continuations))]
+      [(eq? (operator expression) '!=) (not (= (Mvalue (leftoperand expression) state continuations)
+                                               (Mvalue (rightoperand expression) state continuations)))]
+      [(eq? (operator expression) '<=) (<= (Mvalue (leftoperand expression) state continuations)
+                                           (Mvalue (rightoperand expression) state continuations))]
+      [(eq? (operator expression) '>=) (>= (Mvalue (leftoperand expression) state continuations)
+                                           (Mvalue (rightoperand expression) state continuations))]
+      [(eq? (operator expression) '&&) (and (Mboolean (leftoperand expression) state continuations)
+                                            (Mboolean (rightoperand expression) state continuations))]
+      [(eq? (operator expression) '||) (or (Mboolean (leftoperand expression) state continuations)
+                                           (Mboolean (rightoperand expression) state continuations))]
+      [(eq? (operator expression) '!) (not (Mboolean (leftoperand expression) state continuations))]
       [else ((getThrowCont continuations) "The operator is not known")])))
 
 ; lookup. Looks for a variable within a state and returns its value if it is found.
@@ -251,10 +251,10 @@
   (lambda (expression state continuations)
     (cond
       [(and (not (findfirst* (operator expression) state)) (isValueOp (leftoperand expression)))
-       (append (cons (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state) '())) (car state)) '()) (cdr state))]
+       (append (cons (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state continuations) '())) (car state)) '()) (cdr state))]
       [(and (not (findfirst* (operator expression) state)) (isBoolOp (leftoperand expression)))
        (append (cons (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state) '())) (car state)) '()) (cdr state))]
-      [(findfirst* (leftoperand expression) state) (declareandassign (cons (operator expression) (cons (Mvalue (leftoperand expression) state) '())) state continuations)]
+      [(findfirst* (leftoperand expression) state) (declareandassign (cons (operator expression) (cons (Mvalue (leftoperand expression) state continuations) '())) state continuations)]
       [else ((getThrowCont continuations) "The parser should have caught this")])))
 
 ; assign. Takes an assignment expression and a state and assigns a value to a variable within the state.
@@ -267,7 +267,7 @@
     (cond
       [(null? assignment) state]
       [(findfirst* (operator assignment) state) (addWithLayers (operator assignment)
-                                                               (Mvalue (leftoperand assignment) state)
+                                                               (Mvalue (leftoperand assignment) state continuations)
                                                                state
                                                                continuations)]
       [else ((getThrowCont continuations) "The variable has not yet been declared")])))
@@ -290,7 +290,7 @@
   (lambda (var value state continuations)
     (cond
       [(null? state) '()]
-      [(cons (add var value (car state)) (addWithLayers var value (cdr state)))]
+      [(cons (add var value (car state)) (addWithLayers var value (cdr state) continuations))]
       [else ((getThrowCont continuations) "Why")])))
       
 ; findfirst*. Finds the first instance of an atom within a list which could be containing lists.
