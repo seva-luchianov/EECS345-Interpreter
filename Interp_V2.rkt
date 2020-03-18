@@ -33,6 +33,7 @@
   (lambda ()
     '(())))
 
+; (interpret "t.txt")
 ;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
 
 ; The interpret main function. It calls the parser and uses that output to calculate the end state of the
@@ -47,7 +48,7 @@
                             #f
                             k
                             (lambda (v) v)
-                            (lambda (w) w)
+                            (lambda (w) (error 'uncaught-exception "oof"))
                             null)))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
@@ -65,9 +66,7 @@
        (cond
          [(isValueOp expression) Mvalue(expression state)]
          [(isBoolOp expression) Mboolean(expression state)]
-         [(eq? (operator expression) 'throw) (if (null? throw-cont)
-                                                 (error 'uncaught-exception "oof")
-                                                 (throw-cont (popLayer state)))]
+         [(eq? (operator expression) 'throw) (throw-cont (cadr expression))]
          [(and (eq? (operator expression) 'break) (eq? in-begin #t)) (break-cont (popLayer state))]
          [(or (and (eq? (operator expression) 'break) (eq? in-begin #f)) (and (eq? (operator expression) 'continue) (eq? in-begin #f))) (error 'break-outside-block "Break or continue outside of loop body")]
          [(eq? (operator expression) 'var) (declare expression state)]
@@ -76,6 +75,7 @@
                                                              (rightoperand expression) state x)))]
          [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) in-begin break-cont cont-cont throw-cont finally-cont))]
          [(eq? (operator expression) 'try) (tryStatement (cadr expression) state in-begin break-cont cont-cont (caddr expression) (cadddr expression))]
+         [(eq? (operator expression) 'finally) (Mstate (cadr expression) state in-begin break-cont cont-cont throw-cont finally-cont)]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
               (ifStatement (leftoperand expression) (rightoperand expression) state break-cont cont-cont in-begin throw-cont finally-cont)
@@ -333,13 +333,15 @@
 (define tryStatement
   (lambda (body state in-begin break-cont cont-cont throw-cont finally-cont)
     (Mstate
-     body
+     (if (null? finally-cont)
+         body
+         (append body finally-cont))
      state
      in-begin
      break-cont
      cont-cont
      (lambda (v) (Mstate
-                  throw-cont
+                  (cons (cons (append (cons 'var (cadr throw-cont)) (cons v '())) (caddr throw-cont)) finally-cont)
                   state
                   in-begin
                   break-cont
