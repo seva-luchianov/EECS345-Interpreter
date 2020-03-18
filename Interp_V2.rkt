@@ -47,7 +47,7 @@
                             #f
                             k
                             (lambda (v) v)
-                            null
+                            (lambda (w) w)
                             null)))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
@@ -71,7 +71,7 @@
          [(and (eq? (operator expression) 'break) (eq? in-begin #t)) (break-cont (popLayer state))]
          [(or (and (eq? (operator expression) 'break) (eq? in-begin #f)) (and (eq? (operator expression) 'continue) (eq? in-begin #f))) (error 'break-outside-block "Break or continue outside of loop body")]
          [(eq? (operator expression) 'var) (declare expression state)]
-         [(eq? (operator expression) '=) (assign (cdr expression) state)]
+         [(eq? (operator expression) '=) (assign (cdr expression) state throw-cont)]
          [(eq? (operator expression) 'while) (call/cc (lambda (x) (whileStatement (leftoperand expression)
                                                              (rightoperand expression) state x)))]
          [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) in-begin break-cont cont-cont throw-cont finally-cont))]
@@ -206,12 +206,12 @@
 ; Param: state - the state before the assignment has occured.
 ; Return: the state after the variable has been assigned a value based on the assignment expression
 (define assign
-  (lambda (assignment state)
+  (lambda (assignment state throw-cont)
     (cond
       [(null? assignment) state]
       [(findfirst* (operator assignment) state) (addWithLayers (operator assignment)
                                                      (Mvalue (leftoperand assignment) state) state)]
-      [else (error 'notdeclared "The variable has not yet been declared")])))
+      [else (throw-cont (error 'notdeclared "The variable has not yet been declared"))])))
 
 ; add. Adds a value to the state at a certain point corresponding to the variable name it is being added to.
 ; Param: var - the variable name of which to add the value to.
@@ -332,7 +332,35 @@
 ; tryStatement
 (define tryStatement
   (lambda (body state in-begin break-cont cont-cont throw-cont finally-cont)
-    (Mstate body state in-begin break-cont cont-cont throw-cont finally-cont)))
+    (Mstate
+     body
+     state
+     in-begin
+     break-cont
+     cont-cont
+     (lambda (v) (Mstate
+                  throw-cont
+                  state
+                  in-begin
+                  break-cont
+                  cont-cont
+                  (lambda (x) x)
+                  (lambda (f) (Mstate
+                               throw-cont
+                               state
+                               in-begin
+                               break-cont
+                               cont-cont
+                               (lambda (y) y)
+                               null))))
+     (lambda (g) (Mstate
+                  throw-cont
+                  state
+                  in-begin
+                  break-cont
+                  cont-cont
+                  (lambda (y) y)
+                  null)))))
 
 ; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type
 ; of statement the untouched.
