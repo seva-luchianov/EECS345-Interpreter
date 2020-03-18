@@ -33,6 +33,18 @@
   (lambda ()
     '(())))
 
+; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type
+; of statement the untouched.
+; Param: expression - the expression that will be changed if it is equal to #f or #t.
+; Return: 'true is the statement was #t, 'false is the statement was #f, and the original expression
+; if it was neither.
+(define get_return_val
+  (lambda (expression)
+    (cond
+      [(eq? expression #t) 'true]
+      [(eq? expression #f) 'false]
+      [else expression])))
+
 ; (interpret "t.txt")
 ;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
 
@@ -42,14 +54,15 @@
 ; Return: The return value of the function from the state that it calculated
 (define interpret
   (lambda (filename)
-    (call/cc
-     (lambda (return-cont)
-       (Mstate
-        (parser filename)
-        (initState)
-        ; use default configureation but set return to jump here
-        (setReturnCont (generateContinuations) return-cont)
-        )))))
+    (get_return_val
+     (call/cc
+      (lambda (return-cont)
+        (Mstate
+         (parser filename)
+         (initState)
+         ; use default configureation but set return to jump here
+         (setReturnCont (generateContinuations) return-cont)
+         ))))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
@@ -66,10 +79,10 @@
        (cond
          [(isValueOp expression) Mvalue(expression state continuations)]
          [(isBoolOp expression) Mboolean(expression state continuations)]
-         [(eq? (operator expression) 'return) ((getReturnCont continuations) (popLayer state))]
+         [(eq? (operator expression) 'return) ((getReturnCont continuations) (Mvalue (cadr expression) state continuations))]
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
          [(eq? (operator expression) 'continue) ((getContinueCont continuations) (popLayer state))]
-         [(eq? (operator expression) 'throw) ((getThrowCont continuations) (cadr expression))]
+         [(eq? (operator expression) 'throw) ((getThrowCont continuations) (Mvalue (cadr expression) state continuations))]
          [(eq? (operator expression) 'var) (declare expression state continuations)]
          [(eq? (operator expression) '=) (assign (cdr expression) state continuations)]
          [(eq? (operator expression) 'while) (call/cc (lambda (break-cont) (whileStatement
@@ -415,18 +428,6 @@
   (lambda ()
     (lambda (e)
       (error 'uncaught-exception "oof"))))
-
-; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type
-; of statement the untouched.
-; Param: expression - the expression that will be changed if it is equal to #f or #t.
-; Return: 'true is the statement was #t, 'false is the statement was #f, and the original expression
-; if it was neither.
-(define get_return_val
-  (lambda (expression)
-    (cond
-      [(eq? expression #t) 'true]
-      [(eq? expression #f) 'false]
-      [else expression])))
 
 ;remove all but global layer
 (define popLayer
