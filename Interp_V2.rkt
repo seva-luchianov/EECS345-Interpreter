@@ -333,28 +333,12 @@
 (define tryStatement
   (lambda (body state in-begin break-cont cont-cont throw-cont finally-cont)
     (Mstate
-     (if (null? finally-cont)
-         body
-         (append body finally-cont))
+     (appendFinallyCont body finally-cont)
      state
      in-begin
      break-cont
      cont-cont
-     (lambda (v) (Mstate
-                  (cons (cons (append (cons 'var (cadr throw-cont)) (cons v '())) (caddr throw-cont)) finally-cont)
-                  state
-                  in-begin
-                  break-cont
-                  cont-cont
-                  (lambda (x) x)
-                  (lambda (f) (Mstate
-                               throw-cont
-                               state
-                               in-begin
-                               break-cont
-                               cont-cont
-                               (lambda (y) y)
-                               null))))
+     (generateThrowCont throw-cont finally-cont state in-begin break-cont cont-cont)
      (lambda (g) (Mstate
                   throw-cont
                   state
@@ -363,6 +347,34 @@
                   cont-cont
                   (lambda (y) y)
                   null)))))
+
+(define buildThrowBody
+  (lambda (parsed-throw-body e)
+    (cons (append (cons 'var (cadr parsed-throw-body)) (cons e '())) (caddr parsed-throw-body))))
+
+(define appendFinallyCont
+  (lambda (body finally-cont)
+    (if (null? finally-cont)
+        body
+        (append body finally-cont))))
+
+(define generateThrowCont
+  (lambda (throw-cont finally-cont state in-begin break-cont cont-cont)
+    (call/cc
+     (lambda (e)
+       (Mstate
+        (appendFinallyCont (buildThrowBody throw-cont e) finally-cont)
+        state
+        in-begin
+        break-cont
+        cont-cont
+        (generateDefaultThrowCont)
+        null)))))
+
+(define generateDefaultThrowCont
+  (lambda ()
+    (lambda (e)
+      (error 'uncaught-exception "oof"))))
 
 ; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type
 ; of statement the untouched.
