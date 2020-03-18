@@ -46,7 +46,6 @@
       [else expression])))
 
 ; (interpret "t.txt")
-;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
 
 ; The interpret main function. It calls the parser and uses that output to calculate the end state of the
 ; input file
@@ -57,12 +56,13 @@
     (get_return_val
      (call/cc
       (lambda (return-cont)
-        (Mstate
-         (parser filename)
-         (initState)
-         ; use default configureation but set return to jump here
-         (setReturnCont (generateContinuations) return-cont)
-         ))))))
+        (call/cc
+         (lambda (throw-cont)
+           (Mstate
+            (parser filename)
+            (initState)
+            ; use default configuration but set return to jump here
+            (setThrowCont (setReturnCont (generateContinuations) return-cont) throw-cont)))))))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
@@ -109,7 +109,7 @@
 ; continuation helpers
 ; used so that the function signature for Mstate and all helpers just takes in a single continuations parameter
 (define generateContinuations
-  (lambda () 
+  (lambda ()
     ; return-cont (Should never be invalid so this will always be override right now)
     (cons (lambda (v) ('error "Invalid return statement"))
           ; break-cont
@@ -117,21 +117,9 @@
                 ; continue-cont
                 (cons (lambda (v) ('error "Invalid continue statement"))
                       ; throw-cont
-                      (cons (lambda (v) ('error v))
+                      (cons (lambda (v) (cons 'error (cons v '())))
                             ; default finally-cont is null
                             (cons null '())))))))
-
-(define pushFinallyContinuation
-  (lambda (continuations finally-cont)
-    (setReturnCont
-     (setBreakCont
-      (setContinueCont
-       (setThrowCont
-        continuations
-        (lambda (v) ((getThrowCont continuations) (finally-cont v))))
-       (lambda (v) ((getContinueCont continuations) (finally-cont v))))
-      (lambda (v) ((getBreakCont continuations) (finally-cont v))))
-     (lambda (v) ((getReturnCont continuations) (finally-cont v))))))
 
 (define getReturnCont car)
 (define getBreakCont cadr)
@@ -407,27 +395,39 @@
 ; tryStatement
 (define tryStatement
   (lambda (expression-parts state continuations)
-    (call/cc
-     (lambda (finally-cont)
-       (Mstate
-        (car expression-parts)
-        state
-        (continuations))))))
+    (Mstate
+     ; try-expression
+     (car expression-parts)
+     state
+     (pushFinallyContinuation
+      (setThrowCont continuations (buildThrowBody (cadr expression-parts)))
+      (createFinallyContinuation (caddr expression-parts) state continuations)))))
 
-(define create-finally
+(define pushFinallyContinuation
+  (lambda (continuations finally-cont)
+    (setReturnCont
+     (setBreakCont
+      (setContinueCont
+       (setThrowCont
+        continuations
+        (lambda (v) ((getThrowCont continuations) (finally-cont v))))
+       (lambda (v) ((getContinueCont continuations) (finally-cont v))))
+      (lambda (v) ((getBreakCont continuations) (finally-cont v))))
+     (lambda (v) ((getReturnCont continuations) (finally-cont v))))))
+
+(define createFinallyContinuation
   (lambda (finally-expression state continuations)
     (if (null? finally-expression)
         (lambda (e) e)
         (lambda (e) (Mstate (cons 'begin (cadr finally-expression)) state continuations)))))
 
-(define buildThrowBody
-  (lambda (parsed-throw-body e)
-    (cons (append (cons 'var (cadr parsed-throw-body)) (cons e '())) (caddr parsed-throw-body))))
 
-(define generateDefaultThrowCont
-  (lambda ()
+;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
+  
+(define buildThrowBody
+  (lambda (throw-expression)
     (lambda (e)
-      (error 'uncaught-exception "oof"))))
+      (cons (append (cons 'var (cadr throw-expression)) (cons e '())) (caddr throw-expression)))))
 
 ;remove all but global layer
 (define popLayer
