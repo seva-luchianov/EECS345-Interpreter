@@ -33,13 +33,22 @@
   (lambda ()
     '(())))
 
+;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
+
 ; The interpret main function. It calls the parser and uses that output to calculate the end state of the
 ; input file
 ; Param: filename - the name of the text file containing the code to be parsed
 ; Return: The return value of the function from the state that it calculated
 (define interpret
   (lambda (filename)
-      (call/cc (lambda (k) (Mstate (parser filename) (initState) #f k (lambda (v) v))))))
+      (call/cc (lambda (k) (Mstate
+                            (parser filename)
+                            (initState)
+                            #f
+                            k
+                            (lambda (v) v)
+                            null
+                            null)))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
@@ -47,27 +56,31 @@
 ; Param: state - the old state used to obtain the new state with the given expression
 ; Return: The state of the code after the expression
 (define Mstate
-  (lambda (expression state in-begin break-cont cont-cont)
+  (lambda (expression state in-begin break-cont cont-cont throw-cont finally-cont)
     (cond
       [(null? expression) state]
       [(number? state) state]
-      [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state in-begin break-cont cont-cont) in-begin break-cont cont-cont)]
+      [(list? (car expression)) (Mstate (cdr expression) (Mstate (car expression) state in-begin break-cont cont-cont throw-cont finally-cont) in-begin break-cont cont-cont throw-cont finally-cont)]
       [else
        (cond
          [(isValueOp expression) Mvalue(expression state)]
          [(isBoolOp expression) Mboolean(expression state)]
+         [(eq? (operator expression) 'throw) (if (null? throw-cont)
+                                                 (error 'uncaught-exception "oof")
+                                                 (throw-cont (popLayer state)))]
          [(and (eq? (operator expression) 'break) (eq? in-begin #t)) (break-cont (popLayer state))]
          [(or (and (eq? (operator expression) 'break) (eq? in-begin #f)) (and (eq? (operator expression) 'continue) (eq? in-begin #f))) (error 'break-outside-block "Break or continue outside of loop body")]
          [(eq? (operator expression) 'var) (declare expression state)]
          [(eq? (operator expression) '=) (assign (cdr expression) state)]
          [(eq? (operator expression) 'while) (call/cc (lambda (x) (whileStatement (leftoperand expression)
                                                              (rightoperand expression) state x)))]
-         [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) in-begin break-cont cont-cont))]
+         [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) in-begin break-cont cont-cont throw-cont finally-cont))]
+         [(eq? (operator expression) 'try) (tryStatement (cadr expression) state in-begin break-cont cont-cont (caddr expression) (cadddr expression))]
          [(eq? (operator expression) 'if)
           (if (doesNotHaveElseStatement expression)
-              (ifStatement (leftoperand expression) (rightoperand expression) state break-cont cont-cont in-begin)
+              (ifStatement (leftoperand expression) (rightoperand expression) state break-cont cont-cont in-begin throw-cont finally-cont)
               (ifElseStatement (leftoperand expression) (rightoperand expression)
-                               (thirdOperand expression) state break-cont cont-cont in-begin))]
+                               (thirdOperand expression) state break-cont cont-cont in-begin throw-cont finally-cont))]
          [(eq? (operator expression) 'continue) (cont-cont state)]
          [(eq? (operator expression) 'break) (break-cont state)]
          [(eq? (operator expression) 'return)
@@ -75,6 +88,7 @@
             [(isBoolOp (leftoperand expression)) (break-cont (get_return_val (Mboolean (leftoperand expression) state)))]
             [(null? (cdr (cdr expression))) (break-cont (get_return_val (Mvalue (car (cdr expression)) state)))]
             [else (break-cont (get_return_val(Mvalue (cdr expression) state)))])]
+         [(and (eq? (operator expression) 'error) (not (null? throw-cont))) (throw-cont expression)]
          [else state])])))
 
 ; M_value. Obtains the value of an numerical expression. Can do the following operators: +,-,*,/,%,(negation),
@@ -282,10 +296,10 @@
 ; Param state -  the state of the code before the if-else statement.
 ; Return: the state of the code after the if-else statement is executed.
 (define ifElseStatement
-  (lambda (condition statement1 statement2 state break-cont cont-cont in-begin)
+  (lambda (condition statement1 statement2 state break-cont cont-cont in-begin throw-cont finally-cont)
     (cond
-      [(Mboolean condition state) (Mstate statement1 state in-begin break-cont cont-cont)]
-      [else (Mstate statement2 state #t break-cont cont-cont)])))
+      [(Mboolean condition state) (Mstate statement1 state in-begin break-cont cont-cont throw-cont finally-cont)]
+      [else (Mstate statement2 state #t break-cont cont-cont throw-cont finally-cont)])))
 
 ; ifStatement. Handles if statements within the code without an else statement. Checks
 ; the condition and evaluates the state after the statement if the condition is true.
@@ -296,9 +310,9 @@
 ; Param state - the state of the code before the if statement.
 ; Return: the state of the code after the if statement is executed.
 (define ifStatement
-  (lambda (condition statement1 state break-cont cont-cont in-begin)
+  (lambda (condition statement1 state break-cont cont-cont in-begin throw-cont finally-cont)
     (cond
-      [(Mboolean condition state) (Mstate statement1 state in-begin break-cont cont-cont)]
+      [(Mboolean condition state) (Mstate statement1 state in-begin break-cont cont-cont throw-cont finally-cont)]
       [else state])))
 
 ; whileStatement. Handles while loops within the code. Checks a condition and decides whether to execute the
@@ -309,11 +323,16 @@
 ; Param: state - the state of the code before the while loop is executed.
 ; Return: the state of the code after the while loop is executed.
 (define whileStatement
-  (lambda (condition statement state break)
+  (lambda (condition statement state break throw-cont finally-cont)
     (cond
      ;[(eq? statement 'break) (break state)]
-     [(Mboolean condition state) (whileStatement condition statement (call/cc (lambda (k) (Mstate statement state #t break k))) break)]
+     [(Mboolean condition state) (whileStatement condition statement (call/cc (lambda (k) (Mstate statement state #t break k throw-cont finally-cont))) break)]
      [else state])))
+
+; tryStatement
+(define tryStatement
+  (lambda (body state in-begin break-cont cont-cont throw-cont finally-cont)
+    (Mstate body state in-begin break-cont cont-cont throw-cont finally-cont)))
 
 ; get_return_val. Takes an expression and changes #t to 'true and #f to 'false while leaving any other type
 ; of statement the untouched.
