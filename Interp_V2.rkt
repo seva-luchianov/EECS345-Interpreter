@@ -45,8 +45,6 @@
       [(eq? expression #f) 'false]
       [else expression])))
 
-; (interpret "t.txt")
-
 ; The interpret main function. It calls the parser and uses that output to calculate the end state of the
 ; input file
 ; Param: filename - the name of the text file containing the code to be parsed
@@ -150,6 +148,18 @@
 (define setThrowCont
   (lambda (continuations cont)
     (replace-atom continuations 3 cont)))
+
+(define setFinallyCont
+  (lambda (continuations finally-cont)
+    (setReturnCont
+     (setBreakCont
+      (setContinueCont
+       (setThrowCont
+        continuations
+        (lambda (v) ((getThrowCont continuations) (finally-cont v))))
+       (lambda (v) ((getContinueCont continuations) (finally-cont v))))
+      (lambda (v) ((getBreakCont continuations) (finally-cont v))))
+     (lambda (v) ((getReturnCont continuations) (finally-cont v))))))
 
 ; M_value. Obtains the value of an numerical expression. Can do the following operators: +,-,*,/,%,(negation),
 ; as well as return the values of declared and assigned variables
@@ -400,22 +410,19 @@
     (Mstate
      ; try-expression
      (car expression-parts)
-     state
-     (pushFinallyContinuation
-      (setThrowCont continuations (buildThrowBody (cadr expression-parts)))
-      (createFinallyContinuation (caddr expression-parts) state continuations)))))
+     state (setFinallyCont continuations (createFinallyContinuation
+                                          ; finally-expression (can be null)
+                                          (caddr expression-parts)
+                                          state (setThrowCont continuations (createThrowContinuation
+                                                                             ; catch-expression
+                                                                             (cadr expression-parts) state continuations)))))))
 
-(define pushFinallyContinuation
-  (lambda (continuations finally-cont)
-    (setReturnCont
-     (setBreakCont
-      (setContinueCont
-       (setThrowCont
-        continuations
-        (lambda (v) ((getThrowCont continuations) (finally-cont v))))
-       (lambda (v) ((getContinueCont continuations) (finally-cont v))))
-      (lambda (v) ((getBreakCont continuations) (finally-cont v))))
-     (lambda (v) ((getReturnCont continuations) (finally-cont v))))))
+;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
+
+(define createThrowContinuation
+  (lambda (catch-expression state continuations)
+    (lambda (e)
+      (Mstate (cons 'begin (cons (append (cons 'var (cadr catch-expression)) (cons e '())) (caddr catch-expression))) state continuations))))
 
 (define createFinallyContinuation
   (lambda (finally-expression state continuations)
@@ -424,12 +431,7 @@
         (lambda (e) (Mstate (cons 'begin (cadr finally-expression)) state continuations)))))
 
 
-;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
-  
-(define buildThrowBody
-  (lambda (throw-expression)
-    (lambda (e)
-      (cons (append (cons 'var (cadr throw-expression)) (cons e '())) (caddr throw-expression)))))
+; (interpret "t.txt")
 
 ;remove all but global layer
 (define popLayer
