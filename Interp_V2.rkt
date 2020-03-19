@@ -410,19 +410,19 @@
     (Mstate
      ; try-expression
      (car expression-parts)
-     state (setFinallyCont continuations (createFinallyContinuation
-                                          ; finally-expression (can be null)
-                                          (caddr expression-parts)
-                                          state (setThrowCont continuations (createThrowContinuation
-                                                                             ; catch-expression
-                                                                             (cadr expression-parts) state continuations)))))))
+     state (call/cc (lambda (throw-cont) (setFinallyCont continuations (createFinallyContinuation
+                                                                        ; finally-expression (can be null)
+                                                                        (caddr expression-parts)
+                                                                        state (setThrowCont continuations (createThrowContinuation
+                                                                                                           ; catch-expression
+                                                                                                           (cadr expression-parts) state continuations throw-cont)))))))))
 
 ;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
 
 (define createThrowContinuation
-  (lambda (catch-expression state continuations)
+  (lambda (catch-expression state continuations throw-cont)
     (lambda (e)
-      (Mstate (cons 'begin (cons (append (cons 'var (cadr catch-expression)) (cons e '())) (caddr catch-expression))) state continuations))))
+      (throw-cont (Mstate (cons 'begin (cons (append (cons 'var (cadr catch-expression)) (cons e '())) (caddr catch-expression))) state continuations)))))
 
 (define createFinallyContinuation
   (lambda (finally-expression state continuations)
