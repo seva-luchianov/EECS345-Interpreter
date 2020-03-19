@@ -258,7 +258,7 @@
       [(and (not (findfirst* (operator expression) state)) (isValueOp (leftoperand expression)))
        (append (cons (cons (cons (car expression) (cons (Mvalue (leftoperand expression) state continuations) '())) (car state)) '()) (cdr state))]
       [(and (not (findfirst* (operator expression) state)) (isBoolOp (leftoperand expression)))
-       (append (cons (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state) '())) (car state)) '()) (cdr state))]
+       (append (cons (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state continuations) '())) (car state)) '()) (cdr state))]
       [(findfirst* (leftoperand expression) state) (declareandassign (cons (operator expression) (cons (Mvalue (leftoperand expression) state continuations) '())) state continuations)]
       [else ((getThrowCont continuations) "The parser should have caught this")])))
 
