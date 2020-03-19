@@ -82,8 +82,8 @@
          [(eq? (operator expression) 'return)
           (cond
             [(isBoolOp (leftoperand expression)) ((getReturnCont continuations) (Mboolean (leftoperand expression) state continuations))]
-            [(null? (cdr (cdr expression))) ((getReturnCont continuations) (Mvalue (car (cdr expression)) state))]
-            [else ((getReturnCont continuations) (Mvalue (cdr expression) state))])]
+            [(null? (cdr (cdr expression))) ((getReturnCont continuations) (Mvalue (car (cdr expression)) state continuations))]
+            [else ((getReturnCont continuations) (Mvalue (cdr expression) state continuations))])]
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
          [(eq? (operator expression) 'continue) ((getContinueCont continuations) (popLayer state))]
          [(eq? (operator expression) 'throw) ((getThrowCont continuations) (Mvalue (cadr expression) state continuations))]
