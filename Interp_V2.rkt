@@ -57,12 +57,25 @@
      (call/cc
       (lambda (return-cont)
         (call/cc
-         (lambda (throw-cont)
-           (Mstate
-            (parser filename)
-            (initState)
-            ; use default configuration but set return to jump here
-            (setThrowCont (setReturnCont (generateContinuations) return-cont) throw-cont)))))))))
+         (lambda (break-cont)
+           (call/cc
+            (lambda (continue-cont)
+              (call/cc
+               (lambda (throw-cont)
+                 (Mstate
+                  (parser filename)
+                  (initState)
+                  ; use default configuration but set return to jump here
+                  (setThrowCont
+                   (setContinueCont
+                    (setBreakCont
+                     (setReturnCont
+                      ; return-cont break-cont continue-cont throw-cont finally-cont
+                      '(null null null null null)
+                      return-cont)
+                     (lambda (v) (break-cont "Invalid break statement")))
+                    (lambda (v) (continue-cont "Invalid continue statement")))
+                   throw-cont))))))))))))); default finally-cont is null
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
@@ -109,21 +122,6 @@
                                                state
                                                continuations))]
          [else state])])))
-
-; continuation helpers
-; used so that the function signature for Mstate and all helpers just takes in a single continuations parameter
-(define generateContinuations
-  (lambda ()
-    ; return-cont (Should never be invalid so this will always be override right now)
-    (cons (lambda (v) ('error "Invalid return statement"))
-          ; break-cont
-          (cons (lambda (v) ('error "Invalid break statement"))
-                ; continue-cont
-                (cons (lambda (v) ('error "Invalid continue statement"))
-                      ; throw-cont
-                      (cons (lambda (v) (cons 'error (cons v '())))
-                            ; default finally-cont is null
-                            (cons null '())))))))
 
 (define getReturnCont car)
 (define getBreakCont cadr)
