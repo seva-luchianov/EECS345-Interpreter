@@ -1,8 +1,7 @@
 var x;
-continue;
+
 try {
   x = 20;
-  if (x > 10)
     throw 10;
   x = x + 5;
 }

@@ -63,6 +63,7 @@
             ; use default configuration but set return to jump here
             (setReturnCont (generateContinuations) return-cont))))))))
 
+
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
 ; Param: expression - the expression of which to generate the new state from
@@ -85,10 +86,12 @@
             [else ((getReturnCont continuations) (Mvalue (cdr expression) state continuations))])]
          [(and (eq? (operator expression) 'break) (eq? (getBreakCont continuations) null)) ((getReturnCont continuations) "Break in an unvalid location")]
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
-         [(and (eq? (operator expression) 'catch) (eq? (getThrowCont continuations) null)) state]
+         ;[(and (eq? (operator expression) 'catch) (eq? (getThrowCont continuations) null)) state]
+         [(eq? (operator expression) 'catch) (display continuations)]
          [(and (eq? (operator expression) 'continue) (eq? (getContinueCont continuations) null)) ((getReturnCont continuations) "Continue in an unvalid location")]
          [(eq? (operator expression) 'continue) ((getContinueCont continuations) (popLayer state))]
-         [(eq? (operator expression) 'throw) (display (setThrowCont continuations (Mvalue (cadr expression) state continuations)))]
+         [(and (eq? (operator expression) 'throw) (eq? (getThrowCont continuations) null)) ((getReturnCont continuations) "Throw in an unvalid location")]
+         [(eq? (operator expression) 'throw) ((getThrowCont continuations) (popLayer state))]
          [(eq? (operator expression) 'var) (declare expression state continuations)]
          [(eq? (operator expression) '=) (assign (cdr expression) state continuations)]
          [(eq? (operator expression) 'while) (call/cc (lambda (break-cont) (whileStatement
@@ -98,7 +101,7 @@
                                                                             (setBreakCont continuations break-cont))))]
          [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) continuations))]
          [(eq? (operator expression) 'try) (tryStatement2 (cdr expression) (addLayer state) continuations)]
-         [(eq? (operator expression) 'finally) (Mstate (cdr expression) (addLayer state) continuations)]
+         [(eq? (operator expression) 'finally) (popLayer (Mstate (cdr expression) (addLayer state) continuations))]
          [(eq? (operator expression) 'if) (if (doesNotHaveElseStatement expression)
                                               (ifStatement
                                                (leftoperand expression)
@@ -113,9 +116,15 @@
                                                continuations))]
          [else state])])))
 
+;(define catchStatement
+ ; (lambda (catch-varibale expression)
+    
+
 (define tryStatement2
   (lambda (full-expression state continuations)
-    (Mstate (finallyExpress full-expression) (popLayer (Mstate (catchExpress full-expression) (popLayer (Mstate (car full-expression) state continuations)) continuations)) continuations)))
+    (cond
+      [(findfirst* 'throw (car full-expression)) (Mstate (finallyExpress full-expression) (Mstate (catchExpress full-expression) (call/cc (lambda (throw-cont) (Mstate (car full-expression) state (setThrowCont continuations throw-cont)))) continuations) continuations)]
+      [else (Mstate (finallyExpress full-expression) (call/cc (lambda (throw-cont) (Mstate (car full-expression) state (setThrowCont continuations throw-cont)))) continuations)])))
 
 (define finallyExpress
   (lambda (full-expression)
@@ -130,7 +139,7 @@
 (define generateContinuations
   (lambda ()
     ; return-cont (Should never be invalid so this will always be override right now)
-    (cons (lambda (v) ('error "Invalid return statement"))
+    (cons null
           ; break-cont
           (cons null
                 ; continue-cont
@@ -176,7 +185,7 @@
 (define Mvalue
   (lambda (expression state continuations)
     (cond
-      [(null? expression) ((getThrowCont continuations) "parser should have caught this")]
+      [(null? expression) ((getReturnCont continuations) "parser should have caught this")]
       [(number? expression) expression]
       [(and (not (number? expression)) (not (list? expression))) (getLookupValue expression state continuations)]
       [(and (eq? '- (operator expression)) (null? (cdr (cdr expression))))
@@ -191,7 +200,7 @@
                                                 (Mvalue (rightoperand expression) state continuations))]
       [(eq? '% (operator expression)) (remainder (Mvalue (leftoperand expression) state continuations)
                                                  (Mvalue (rightoperand expression) state continuations))]
-      [else ((getThrowCont continuations) "The operator is not known")])))
+      [else ((getReturnCont continuations) "The operator is not known")])))
 
 ; Mboolean. Takes a boolean expression and returns the boolean value of that expression.
 ; Param: expression - The boolean expression of which you want to obtain the boolean value of
@@ -220,7 +229,7 @@
       [(eq? (operator expression) '||) (or (Mboolean (leftoperand expression) state continuations)
                                            (Mboolean (rightoperand expression) state continuations))]
       [(eq? (operator expression) '!) (not (Mboolean (leftoperand expression) state continuations))]
-      [else ((getThrowCont continuations) "The operator is not known")])))
+      [else ((getReturnCont continuations) "The operator is not known")])))
 
 ; lookup. Looks for a variable within a state and returns its value if it is found.
 ; Param: a - the atom representing the variable that you wish to look up the value of.
@@ -244,7 +253,7 @@
 (define getLookupValue
   (lambda (a state continuations)
     (cond
-      [(null? (flatten (LayerLookup a state))) ((getThrowCont continuations) "variable for lookup not assigned or declared in any layer")]
+      [(null? (flatten (LayerLookup a state))) ((getReturnCont continuations) "variable for lookup not assigned or declared in any layer")]
       [else (car (flatten (LayerLookup a state)))])))
 
 ; declare. Takes an expression and a state and declares a new varible within the state.
@@ -259,7 +268,7 @@
       [(and (not (null? (cdr (cdr expression)))) (not (findfirst* (leftoperand expression) state)))
        (declareandassign (cdr expression) state continuations)]
       [(not (findfirst* (leftoperand expression) state)) (cons (cons (cons (leftoperand expression) '()) (car state)) '())]
-      [else ((getThrowCont continuations) "This variable has already been declared")])))
+      [else ((getReturnCont continuations) "This variable has already been declared")])))
 
 ; declareandassign. Takes an expression and a state and declares a variable and assigns a value to
 ; it based on the expression.
@@ -275,7 +284,7 @@
       [(and (not (findfirst* (operator expression) state)) (isBoolOp (leftoperand expression)))
        (append (cons (cons (cons (car expression) (cons (Mboolean (leftoperand expression) state continuations) '())) (car state)) '()) (cdr state))]
       [(findfirst* (leftoperand expression) state) (declareandassign (cons (operator expression) (cons (Mvalue (leftoperand expression) state continuations) '())) state continuations)]
-      [else ((getThrowCont continuations) "The parser should have caught this")])))
+      [else ((getReturnCont continuations) "The parser should have caught this")])))
 
 ; assign. Takes an assignment expression and a state and assigns a value to a variable within the state.
 ; Param: assignment - the expression that contains the variable name to be assigned and the value to
@@ -290,7 +299,7 @@
                                                                (Mvalue (leftoperand assignment) state continuations)
                                                                state
                                                                continuations)]
-      [else ((getThrowCont continuations) "The variable has not yet been declared")])))
+      [else ((getReturnCont continuations) "The variable has not yet been declared")])))
 
 ; add. Adds a value to the state at a certain point corresponding to the variable name it is being added to.
 ; Param: var - the variable name of which to add the value to.
@@ -311,7 +320,7 @@
     (cond
       [(null? state) '()]
       [(cons (add var value (car state)) (addWithLayers var value (cdr state) continuations))]
-      [else ((getThrowCont continuations) "Why")])))
+      [else ((getReturnCont continuations) "Why")])))
       
 ; findfirst*. Finds the first instance of an atom within a list which could be containing lists.
 ; Returns a boolean value as to whether it found the atom or not.
@@ -411,44 +420,8 @@
                                                 continuations)]
      [else state])))
 
-; tryStatement
-(define tryStatement
-  (lambda (expression-parts state continuations)
-    (Mstate
-     ; try-expression
-     (car expression-parts)
-     state
-     (pushFinallyContinuation
-      (setThrowCont continuations (buildThrowBody (cadr expression-parts)))
-      (createFinallyContinuation (caddr expression-parts) state continuations)))))
 
-(define pushFinallyContinuation
-  (lambda (continuations finally-cont)
-    (setReturnCont
-     (setBreakCont
-      (setContinueCont
-       (setThrowCont
-        continuations
-        (lambda (v) ((getThrowCont continuations) (finally-cont v))))
-       (lambda (v) ((getContinueCont continuations) (finally-cont v))))
-      (lambda (v) ((getBreakCont continuations) (finally-cont v))))
-     (lambda (v) ((getReturnCont continuations) (finally-cont v))))))
-
-(define createFinallyContinuation
-  (lambda (finally-expression state continuations)
-    (if (null? finally-expression)
-        (lambda (e) e)
-        (lambda (e) (Mstate (cons 'begin (cadr finally-expression)) state continuations)))))
-
-
-;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
-  
-(define buildThrowBody
-  (lambda (throw-expression)
-    (lambda (e)
-      (cons (append (cons 'var (cadr throw-expression)) (cons e '())) (caddr throw-expression)))))
-
-;remove all but global layer
+;remove top layer global layer
 (define popLayer
   (lambda (state)
     (cond
