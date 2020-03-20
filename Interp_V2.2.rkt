@@ -86,7 +86,7 @@
             [else ((getReturnCont continuations) (Mvalue (car (cdr expression)) state continuations))])]
          [(and (eq? (operator expression) 'break) (eq? (getBreakCont continuations) null)) ((getReturnCont continuations) "Break in an unvalid location")]
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
-         [(and (eq? (operator expression) 'catch) (eq? (getThrowCont continuations) 'no-throw-encountered)) state]
+         [(and (eq? (operator expression) 'catch) (eq? (getFinallyCont continuations) 'no-throw-encountered)) state]
          [(eq? (operator expression) 'catch) (popLayer (catchStatement (car (car (cdr expression))) (car (car (cdr (cdr expression)))) (addLayer state) continuations))]
          [(and (eq? (operator expression) 'continue) (eq? (getContinueCont continuations) null)) ((getReturnCont continuations) "Continue in an unvalid location")]
          [(eq? (operator expression) 'continue) ((getContinueCont continuations) (popLayer state))]
@@ -100,7 +100,7 @@
                                                                             state
                                                                             (setBreakCont continuations break-cont))))]
          [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) continuations))]
-         [(eq? (operator expression) 'try) (tryStatement2 (cdr expression) (addLayer state) continuations)]
+         [(eq? (operator expression) 'try) (popLayer (tryStatement2 (cdr expression) (addLayer state) continuations))]
          [(eq? (operator expression) 'finally) (popLayer (Mstate (cdr expression) (addLayer state) continuations))]
          [(eq? (operator expression) 'if) (if (doesNotHaveElseStatement expression)
                                               (ifStatement
@@ -119,9 +119,8 @@
 (define catchStatement
   (lambda (catch-variable expression state continuations)
     (cond
-      [(not (eq? (getThrowCont continuations) 'found-throw)) (Mstate expression (declareandassign (cons catch-variable (cons (getThrowCont continuations) '())) state continuations) continuations)]
+      [(not (eq? (getThrowCont continuations) 'no-throw-encountered)) (Mstate expression (declareandassign (cons catch-variable (cons (getThrowCont continuations) '())) state continuations) continuations)]
       [else state])))
-
 
 (define ifStatement-forContinuations
   (lambda (condition statement state continuations)
