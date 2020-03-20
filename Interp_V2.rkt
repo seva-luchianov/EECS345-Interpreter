@@ -51,29 +51,7 @@
 ; Return: The return value of the function from the state that it calculated
 (define interpret
   (lambda (filename)
-    (get_return_val
-     (call/cc
-      (lambda (return-cont)
-        (call/cc
-         (lambda (break-cont)
-           (call/cc
-            (lambda (continue-cont)
-              (call/cc
-               (lambda (throw-cont)
-                 (Mstate
-                  (parser filename)
-                  (initState)
-                  ; use default configuration but set return to jump here
-                  (setThrowCont
-                   (setContinueCont
-                    (setBreakCont
-                     (setReturnCont
-                      ; return-cont break-cont continue-cont throw-cont finally-cont
-                      '(null null null null null)
-                      return-cont)
-                     (lambda (v) (break-cont "Invalid break statement")))
-                    (lambda (v) (continue-cont "Invalid continue statement")))
-                   throw-cont))))))))))))); default finally-cont is null
+    (get_return_val (Mstate (parser filename) (initState) (initContinutations)))))
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
 ; without a value
@@ -121,10 +99,36 @@
                                                continuations))]
          [else state])])))
 
+(define initContinuations
+  (lambda ()
+    (call/cc
+     (lambda (return-cont)
+       (call/cc
+        (lambda (break-cont)
+          (call/cc
+           (lambda (continue-cont)
+             (call/cc
+              (lambda (throw-cont)
+                (call/cc
+                 (lambda (finally-cont)
+                   (setThrowCont
+                    (setContinueCont
+                     (setBreakCont
+                      (setReturnCont
+                       (setFinallyCont
+                        ; return-cont break-cont continue-cont throw-cont finally-cont
+                        '(null null null null null)
+                        finally-cont)
+                       return-cont)
+                      (lambda (v) (break-cont "Invalid break statement")))
+                     (lambda (v) (continue-cont "Invalid continue statement")))
+                    throw-cont)))))))))))))
+
 (define getReturnCont car)
 (define getBreakCont cadr)
 (define getContinueCont caddr)
 (define getThrowCont cadddr)
+(define getFinallyCont (lambda (lis) (cadddr (cdr lis))))
 
 (define replace-atom
   (lambda (lis index a)
@@ -150,16 +154,8 @@
     (replace-atom continuations 3 cont)))
 
 (define setFinallyCont
-  (lambda (continuations finally-cont)
-    (setReturnCont
-     (setBreakCont
-      (setContinueCont
-       (setThrowCont
-        continuations
-        (lambda (v) ((getThrowCont continuations) (finally-cont v))))
-       (lambda (v) ((getContinueCont continuations) (finally-cont v))))
-      (lambda (v) ((getBreakCont continuations) (finally-cont v))))
-     (lambda (v) ((getReturnCont continuations) (finally-cont v))))))
+  (lambda (continuations cont)
+    (replace-atom continuations 4 cont)))
 
 ; M_value. Obtains the value of an numerical expression. Can do the following operators: +,-,*,/,%,(negation),
 ; as well as return the values of declared and assigned variables
@@ -406,32 +402,26 @@
 
 ; tryStatement
 (define tryStatement
-  (lambda (expression-parts state continuations)
-    (Mstate
-     ; try-expression
-     (car expression-parts)
-     state (setFinallyCont continuations (createFinallyContinuation
-                                          ; finally-expression (can be null)
-                                          (caddr expression-parts)
-                                          state (setThrowCont continuations (createThrowContinuation
-                                                                             ; catch-expression
-                                                                             (cadr expression-parts) state continuations)))))))
+  (lambda (expression state continuations)
+    (cond
+      [(and (not (null? (cadr expression))) (not (null? (caddr expression)))) (catchFinally (car expression) (cadr expression) (caddr expression) state continuations)] ;(catchFinally try catch finally state continuations)
+      [(eq? (cadr expression) 'catch) (catch (car expression) (cadr expression) state continuations)] ;(catch try catch state continuations)
+      [else (finally (car expression) (cadr expression) state continuations)]))) ;(finally try finally state continuations)
 
-;((var x) (= x 0) (try ((= x (+ x 10))) (catch (e) ((= x (+ x 100)))) (finally ((= x (+ x 1000))))) (return x))
+;catchFinally
+(define catchFinally
+  (lambda (tryEx catchEx finallyEx state continuations)
+    (Mstate finallyEx (call/cc (lambda (v) catch tryEx catchEx state (setFinallyCont continuations v))) continuations)))
 
-(define createThrowContinuation
-  (lambda (catch-expression state continuations)
-    (lambda (e)
-      (Mstate (cons 'begin (cons (append (cons 'var (cadr catch-expression)) (cons e '())) (caddr catch-expression))) state continuations))))
+;catch
+(define catch
+  (lambda (tryEx catchEx state continuations)
+    (Mstate catchEx (call/cc (lambda (v) (Mstate tryEx state (setThrowCont continuations v)))) continuations)))
 
-(define createFinallyContinuation
-  (lambda (finally-expression state continuations)
-    (if (null? finally-expression)
-        (lambda (e) e)
-        (lambda (e) (Mstate (cons 'begin (cadr finally-expression)) state continuations)))))
-
-
-; (interpret "t.txt")
+;finally
+(define finally
+  (lambda (tryEx finallyEx state continuations)
+    (Mstate finallyEx (call/cc (lambda (v) (Mstate tryEx state (setBreakCont continuations v)))) continuations)))
 
 ;remove all but global layer
 (define popLayer
