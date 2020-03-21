@@ -87,7 +87,7 @@
          [(and (eq? (operator expression) 'break) (eq? (getBreakCont continuations) null)) ((getReturnCont continuations) "Break in an unvalid location")]
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
          [(and (eq? (operator expression) 'catch) (eq? (getFinallyCont continuations) 'no-throw-encountered)) state]
-         [(eq? (operator expression) 'catch) (popLayer (catchStatement (car (car (cdr expression))) (car (car (cdr (cdr expression)))) (addLayer state) continuations))]
+         [(eq? (operator expression) 'catch) (popLayer (catchStatement (car (car (cdr expression))) (car (cdr (cdr expression))) (addLayer state) continuations))]
          [(and (eq? (operator expression) 'continue) (eq? (getContinueCont continuations) null)) ((getReturnCont continuations) "Continue in an unvalid location")]
          [(eq? (operator expression) 'continue) ((getContinueCont continuations) (popLayer state))]
          [(and (eq? (operator expression) 'throw) (eq? (getThrowCont continuations) null)) ((getReturnCont continuations) "Throw in an unvalid location")]
@@ -97,7 +97,7 @@
          [(eq? (operator expression) 'while) (call/cc (lambda (break-cont) (whileStatement
                                                                             (leftoperand expression)
                                                                             (rightoperand expression)
-                                                                            state
+                                                                            (addLayer state)
                                                                             (setBreakCont continuations break-cont))))]
          [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) continuations))]
          [(eq? (operator expression) 'try) (popLayer (tryStatement2 (cdr expression) (addLayer state) continuations))]
