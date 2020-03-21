@@ -1,14 +1,16 @@
-var x;
+var x = 10;
+var result = 1;
 
 try {
-  x = 20;
-    throw 10;
-  x = x + 5;
+  while (x < 10000) {
+    result = result - 1;
+    x = x * 10;
+
+    if (x > 1000)
+      throw x;
+  }
 }
-catch(e) {
-  x = e;
+catch (ex) {
+  throw 1;
 }
-finally {
-  x = x + 100;
-}
-return x;
+return result;
