@@ -84,13 +84,13 @@
             [(isBoolOp (leftoperand expression)) ((getReturnCont continuations) (Mboolean (leftoperand expression) state continuations))]
             [(null? (cdr (cdr expression))) ((getReturnCont continuations) (Mvalue (car (cdr expression)) state continuations))]
             [else ((getReturnCont continuations) (Mvalue (car (cdr expression)) state continuations))])]
-         [(and (eq? (operator expression) 'break) (eq? (getBreakCont continuations) null)) ((getReturnCont continuations) "Break in an unvalid location")]
+         [(and (eq? (operator expression) 'break) (null? (getBreakCont continuations))) ((getReturnCont continuations) "Break in an unvalid location")]
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
          [(and (eq? (operator expression) 'catch) (eq? (getFinallyCont continuations) 'no-throw-encountered)) state]
-         [(eq? (operator expression) 'catch) (popLayer (catchStatement (car (car (cdr expression))) (car (cdr (cdr expression))) (addLayer state) continuations))]
-         [(and (eq? (operator expression) 'continue) (eq? (getContinueCont continuations) null)) ((getReturnCont continuations) "Continue in an unvalid location")]
+         [(eq? (operator expression) 'catch) (popLayer (catchStatement (getCatchVariable expression) (getCatchBody expression) (addLayer state) continuations))]
+         [(and (eq? (operator expression) 'continue) (null? (getContinueCont continuations))) ((getReturnCont continuations) "Continue in an unvalid location")]
          [(eq? (operator expression) 'continue) ((getContinueCont continuations) (popLayer state))]
-         [(and (eq? (operator expression) 'throw) (eq? (getThrowCont continuations) null)) ((getReturnCont continuations) "Throw in an unvalid location")]
+         [(and (eq? (operator expression) 'throw) (null? (getThrowCont continuations))) ((getReturnCont continuations) "Throw in an unvalid location")]
          [(eq? (operator expression) 'throw) ((getThrowCont (setFinallyCont continuations 'found-throw)) (popLayer state))]
          [(eq? (operator expression) 'var) (declare expression state continuations)]
          [(eq? (operator expression) '=) (assign (cdr expression) state continuations)]
@@ -100,7 +100,7 @@
                                                                             (addLayer state)
                                                                             (setBreakCont continuations break-cont))))]
          [(eq? (operator expression) 'begin) (popLayer (Mstate (cdr expression) (addLayer state) continuations))]
-         [(eq? (operator expression) 'try) (popLayer (tryStatement2 (cdr expression) (addLayer state) continuations))]
+         [(eq? (operator expression) 'try) (popLayer (tryStatement (cdr expression) (addLayer state) continuations))]
          [(eq? (operator expression) 'finally) (popLayer (Mstate (cdr expression) (addLayer state) continuations))]
          [(eq? (operator expression) 'if) (if (doesNotHaveElseStatement expression)
                                               (ifStatement
@@ -116,10 +116,20 @@
                                                continuations))]
          [else state])])))
 
+(define getCatchVariable
+  (lambda (catch-expression)
+    (car (cadr catch-expression))))
+(define getCatchBody caddr)
+
 (define catchStatement
   (lambda (catch-variable expression state continuations)
     (cond
-      [(not (eq? (getThrowCont continuations) 'no-throw-encountered)) (Mstate expression (declareandassign (cons catch-variable (cons (getThrowCont continuations) '())) state continuations) continuations)]
+      [(not (eq? (getThrowCont continuations) 'no-throw-encountered))
+       (Mstate expression
+               (declareandassign (cons catch-variable (cons (getThrowCont continuations) '()))
+                                 state
+                                 continuations)
+               continuations)]
       [else state])))
 
 (define ifStatement-forContinuations
@@ -134,10 +144,10 @@
       [(null? expression) continuations]
       [(list? (car expression)) (updateContinuations (cdr expression) (updateContinuations (car expression) continuations state) state)]
       [(and (eq? (operator expression) 'if) (doesNotHaveElseStatement expression)) (ifStatement-forContinuations (leftoperand expression) (rightoperand expression) state continuations)]
-      [(eq? (operator expression) 'throw) ((getFinallyCont continuations) (setThrowCont continuations (Mvalue (car (cdr expression)) state continuations)))]
+      [(eq? (operator expression) 'throw) ((getFinallyCont continuations) (setThrowCont continuations (Mvalue (cadr expression) state continuations)))]
       [else (setThrowCont continuations 'no-throw-encountered)])))
       
-(define tryStatement2
+(define tryStatement
   (lambda (full-expression state continuations)
     (cond
       [(findfirst* 'throw (car full-expression)) (Mstate (finallyExpress full-expression) (Mstate (catchExpress full-expression) (call/cc (lambda (throw-cont) (Mstate (car full-expression) state (setThrowCont continuations throw-cont)))) (call/cc (lambda (final-cont) (updateContinuations (car full-expression) (setFinallyCont continuations final-cont) (call/cc (lambda (throw-cont2) (Mstate (car full-expression) state (setThrowCont continuations throw-cont2)))))))) continuations)]
