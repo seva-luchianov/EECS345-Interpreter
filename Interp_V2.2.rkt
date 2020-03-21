@@ -61,7 +61,7 @@
             (parser filename)
             (initState)
             ; use default configuration but set return to jump here
-            (setReturnCont (generateContinuations) return-cont))))))))
+            (setReturnCont '(null null null null null) return-cont))))))))
 
 
 ; Mstate. Obtains the state of an expression given a state. The original state is set to only contain return
@@ -152,19 +152,6 @@
     (car (cdr full-expression))))
 
 ; continuation helpers
-; used so that the function signature for Mstate and all helpers just takes in a single continuations parameter
-(define generateContinuations
-  (lambda ()
-    ; return-cont (Should never be invalid so this will always be override right now)
-    (cons null
-          ; break-cont
-          (cons null
-                ; continue-cont
-                (cons null
-                      ; throw-cont
-                      (cons null
-                           ; default finally-cont is null
-                            (cons null '())))))))
 
 (define getReturnCont car)
 (define getBreakCont cadr)
