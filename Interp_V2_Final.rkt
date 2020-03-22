@@ -82,8 +82,8 @@
          [(eq? (operator expression) 'return)
           (cond
             [(isBoolOp (leftoperand expression)) ((getReturnCont continuations) (Mboolean (leftoperand expression) state continuations))]
-            [(null? (cdr (cdr expression))) ((getReturnCont continuations) (Mvalue (car (cdr expression)) state continuations))]
-            [else ((getReturnCont continuations) (Mvalue (car (cdr expression)) state continuations))])]
+            [(null? (cdr (cdr expression))) ((getReturnCont continuations) (Mvalue (cadr expression) state continuations))]
+            [else ((getReturnCont continuations) (Mvalue (cadr expression) state continuations))])]
          [(and (eq? (operator expression) 'break) (null? (getBreakCont continuations))) ((getReturnCont continuations) "Error: Break in an invalid location.")]
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
          [(and (eq? (operator expression) 'continue) (null? (getContinueCont continuations))) ((getReturnCont continuations) "Error: Continue in an invalid location.")]
@@ -119,16 +119,41 @@
 (define tryStatement
   (lambda (expression state continuations)
     (cond
-      [(findfirst* '%throw% (call/cc (lambda (v) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v))))) (finallyStatement (finally-expression expression) (popLayer (catchStatement (car (cdr expression)) (popLayer (car (call/cc (lambda (v) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v)))))) continuations (cdr (call/cc (lambda (v2) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v2))))))) continuations)]
+      [(findfirst* '%throw% (call/cc (lambda (v)
+                                       (Mstate
+                                        (cons 'begin (car expression))
+                                        state
+                                        (setThrowCont continuations v)))))
+       (finallyStatement
+        (finally-expression expression)
+        (popLayer
+         (catchStatement (car (cdr expression))
+                         (popLayer
+                          (car (call/cc (lambda (v)
+                                          (Mstate
+                                           (cons 'begin (car expression))
+                                           state
+                                           (setThrowCont continuations v))))))
+                         continuations
+                         (cdr (call/cc (lambda (v2)
+                                         (Mstate
+                                          (cons 'begin (car expression))
+                                          state
+                                          (setThrowCont continuations v2)))))))
+        continuations)]
       [else (finallyStatement (finally-expression expression) (call/cc (lambda (v) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v)))) continuations)])))
+
+(define getCatchVariable
+  (lambda (catch-expression)
+    (car (cadr catch-expression))))
 
 (define catchStatement
   (lambda (catch-expression state continuations throw-value)
     (cond
       [(null? catch-expression) state]
       ;; no throw found
-      [(null? throw-value) (Mstate (caddr catch-expression) (Mstate (cons 'var (cons (car (cadr catch-expression)) '())) (addLayer state) continuations) continuations)]
-      [(Mstate (caddr catch-expression) (Mstate (cons 'var (cons (car (cadr catch-expression)) (cons (car throw-value) '()))) (addLayer state) continuations) continuations)])))
+      [(null? throw-value) (Mstate (caddr catch-expression) (Mstate (cons 'var (cons (getCatchVariable catch-expression) '())) (addLayer state) continuations) continuations)]
+      [(Mstate (caddr catch-expression) (Mstate (cons 'var (cons (getCatchVariable catch-expression) (cons (car throw-value) '()))) (addLayer state) continuations) continuations)])))
 
 (define finallyStatement
   (lambda (finally-expression state continuations)
