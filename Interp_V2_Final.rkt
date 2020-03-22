@@ -140,7 +140,14 @@
                                           state
                                           (setThrowCont continuations v2)))))))
         continuations)]
-      [else (finallyStatement (finally-expression expression) (call/cc (lambda (v) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v)))) continuations)])))
+      [else (finallyStatement
+             (finally-expression expression)
+             (call/cc (lambda (v)
+                        (Mstate
+                         (cons 'begin (car expression))
+                         state
+                         (setThrowCont continuations v))))
+             continuations)])))
 
 (define catchStatement
   (lambda (catch-expression state continuations throw-value)
