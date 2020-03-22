@@ -151,9 +151,17 @@
   (lambda (catch-expression state continuations throw-value)
     (cond
       [(null? catch-expression) state]
-      ;; no throw found
-      [(null? throw-value) (Mstate (caddr catch-expression) (Mstate (cons 'var (cons (getCatchVariable catch-expression) '())) (addLayer state) continuations) continuations)]
-      [(Mstate (caddr catch-expression) (Mstate (cons 'var (cons (getCatchVariable catch-expression) (cons (car throw-value) '()))) (addLayer state) continuations) continuations)])))
+      [(Mstate (caddr catch-expression)
+               (Mstate (buildCatchExpressionToExecute catch-expression throw-value)
+                       (addLayer state)
+                       continuations)
+               continuations)])))
+
+(define buildCatchExpressionToExecute
+  (lambda (catch-expression throw-value)
+    (cons 'var (cons (getCatchVariable catch-expression) (if (null? throw-value)
+                                                           '()
+                                                           (cons (car throw-value) '()))))))
 
 (define finallyStatement
   (lambda (finally-expression state continuations)
