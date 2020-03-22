@@ -1,5 +1,5 @@
 var x = 10;
-var result = 1;
+var result = 2;
 
 try {
   while (x < 10000) {

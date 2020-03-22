@@ -82,11 +82,11 @@
          [(eq? (operator expression) 'return)
           (cond
             [(isBoolOp (leftoperand expression)) ((getReturnCont continuations) (Mboolean (leftoperand expression) state continuations))]
-            [(null? (cdr (cdr expression))) ((getReturnCont continuations) (Mvalue (car (cdr expression)) state continuations))]
-            [else ((getReturnCont continuations) (Mvalue (car (cdr expression)) state continuations))])]
-         [(and (eq? (operator expression) 'break) (eq? (getBreakCont continuations) null)) ((getReturnCont continuations) "Error: Break in an invalid location.")]
+            [(null? (cdr (cdr expression))) ((getReturnCont continuations) (Mvalue (cadr expression) state continuations))]
+            [else ((getReturnCont continuations) (Mvalue (cadr expression) state continuations))])]
+         [(and (eq? (operator expression) 'break) (null? (getBreakCont continuations))) ((getReturnCont continuations) "Error: Break in an invalid location.")]
          [(eq? (operator expression) 'break) ((getBreakCont continuations) (popLayer state))]
-         [(and (eq? (operator expression) 'continue) (eq? (getContinueCont continuations) null)) ((getReturnCont continuations) "Error: Continue in an invalid location.")]
+         [(and (eq? (operator expression) 'continue) (null? (getContinueCont continuations))) ((getReturnCont continuations) "Error: Continue in an invalid location.")]
          [(eq? (operator expression) 'continue) ((getContinueCont continuations) (popLayer state))]
          [(eq? (operator expression) 'var) (declare expression state continuations)]
          [(eq? (operator expression) '=) (assign (cdr expression) state continuations)]
@@ -108,10 +108,9 @@
                                                (thirdOperand expression)
                                                state
                                                continuations))]
-
          [(and (eq? (operator expression) 'throw) (null? (getThrowCont continuations))) ((getReturnCont continuations) "Error: Throw in an invalid location.")]
          [(eq? (operator expression) 'try) (tryStatement (cdr expression) state continuations)]
-         [(eq? (operator expression) 'throw) ((getThrowCont continuations) (cons state (cons (Mvalue (car (cdr expression)) state continuations) '(%throw%))))]
+         [(eq? (operator expression) 'throw) ((getThrowCont continuations) (cons state (cons (Mvalue (cadr expression) state continuations) '(%throw%))))]
          [else state])])))
 
 (define finally-expression caddr)
@@ -119,23 +118,70 @@
 (define tryStatement
   (lambda (expression state continuations)
     (cond
-      [(findfirst* '%throw% (call/cc (lambda (v) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v))))) (finallyStatement (finally-expression expression) (popLayer (catchStatement (car (cdr expression)) (popLayer (car (call/cc (lambda (v) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v)))))) continuations (cdr (call/cc (lambda (v2) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v2))))))) continuations)]
-      [else (finallyStatement (finally-expression expression) (call/cc (lambda (v) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v)))) continuations)])))
+      [(findfirst* '%throw% (call/cc (lambda (v)
+                                       (Mstate
+                                        (cons 'begin (car expression))
+                                        state
+                                        (setThrowCont continuations v)))))
+       (finallyStatement
+        (finally-expression expression)
+        (popLayer
+         (catchStatement (car (cdr expression))
+                         (popLayer
+                          (car (call/cc (lambda (v)
+                                          (Mstate
+                                           (cons 'begin (car expression))
+                                           state
+                                           (setThrowCont continuations v))))))
+                         continuations
+                         (cdr (call/cc (lambda (v2)
+                                         (Mstate
+                                          (cons 'begin (car expression))
+                                          state
+                                          (setThrowCont continuations v2)))))))
+        continuations)]
+      [else (finallyStatement
+             (finally-expression expression)
+             (call/cc (lambda (v)
+                        (Mstate
+                         (cons 'begin (car expression))
+                         state
+                         (setThrowCont continuations v))))
+             continuations)])))
 
 (define catchStatement
   (lambda (catch-expression state continuations throw-value)
     (cond
       [(null? catch-expression) state]
-      ;; no throw found
-      [(null? throw-value) (Mstate (car (cdr (cdr catch-expression))) (Mstate (cons 'var (cons (car (car (cdr catch-expression))) '())) (addLayer state) continuations) continuations)]
-      [(Mstate (car (cdr (cdr catch-expression))) (Mstate (cons 'var (cons (car (car (cdr catch-expression))) (cons (car throw-value) '()))) (addLayer state) continuations) continuations)])))
+      [(Mstate (caddr catch-expression)
+               (Mstate (buildCatchExpressionToExecute catch-expression throw-value)
+                       (addLayer state)
+                       continuations)
+               continuations)])))
+
+; Get the reference to the variable e  |
+;                                      v
+; defined in                     catch(e) { ... }
+(define getCatchVariable
+  (lambda (catch-expression)
+    (car (cadr catch-expression))))
+
+; Construct expression to pass into Mstate
+(define buildCatchExpressionToExecute
+  (lambda (catch-expression throw-value)
+    (cons 'var (cons (getCatchVariable catch-expression)
+                     ; This will resolve to either var e = throw-value; or var e;
+                     ; depending on if the throw statement had a value associated with it
+                     (if (null? throw-value)
+                         '()
+                         (cons (car throw-value) '()))))))
 
 (define finallyStatement
   (lambda (finally-expression state continuations)
     (cond
       [(null? finally-expression) state]
-      [(Mstate (cons 'begin (car (cdr finally-expression))) state continuations)])))
-               
+      [(Mstate (cons 'begin (cadr finally-expression)) state continuations)])))
+
 ; continuation helpers
 ; used so that the function signature for Mstate and all helpers just takes in a single continuations parameter
 (define generateContinuations
