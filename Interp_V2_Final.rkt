@@ -108,7 +108,6 @@
                                                (thirdOperand expression)
                                                state
                                                continuations))]
-
          [(and (eq? (operator expression) 'throw) (null? (getThrowCont continuations))) ((getReturnCont continuations) "Error: Throw in an invalid location.")]
          [(eq? (operator expression) 'try) (tryStatement (cdr expression) state continuations)]
          [(eq? (operator expression) 'throw) ((getThrowCont continuations) (cons state (cons (Mvalue (cadr expression) state continuations) '(%throw%))))]
@@ -143,10 +142,6 @@
         continuations)]
       [else (finallyStatement (finally-expression expression) (call/cc (lambda (v) (Mstate (cons 'begin (car expression)) state (setThrowCont continuations v)))) continuations)])))
 
-(define getCatchVariable
-  (lambda (catch-expression)
-    (car (cadr catch-expression))))
-
 (define catchStatement
   (lambda (catch-expression state continuations throw-value)
     (cond
@@ -157,21 +152,31 @@
                        continuations)
                continuations)])))
 
+; Get the reference to the variable e  |
+;                                      v
+; defined in                     catch(e) { ... }
+(define getCatchVariable
+  (lambda (catch-expression)
+    (car (cadr catch-expression))))
+
+; Construct expression to pass into Mstate
 (define buildCatchExpressionToExecute
   (lambda (catch-expression throw-value)
-    (cons 'var (cons (getCatchVariable catch-expression) (if (null? throw-value)
-                                                           '()
-                                                           (cons (car throw-value) '()))))))
+    (cons 'var (cons (getCatchVariable catch-expression)
+                     ; This will resolve to either var e = throw-value; or var e;
+                     ; depending on if the throw statement had a value associated with it
+                     (if (null? throw-value)
+                         '()
+                         (cons (car throw-value) '()))))))
 
 (define finallyStatement
   (lambda (finally-expression state continuations)
     (cond
       [(null? finally-expression) state]
-      [(Mstate (cons 'begin (car (cdr finally-expression))) state continuations)])))
+      [(Mstate (cons 'begin (cadr finally-expression)) state continuations)])))
 
 ; continuation helpers
 ; used so that the function signature for Mstate and all helpers just takes in a single continuations parameter
-
 (define getReturnCont car)
 (define getBreakCont cadr)
 (define getContinueCont caddr)
