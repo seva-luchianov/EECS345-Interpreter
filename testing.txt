@@ -1,20 +1,14 @@
-var x = 10;
-var result = 2;
-
+var x = 0; 
 try {
-  while (x < 10000) {
-     result = result - 1;
-     x = x + 10;
-
-     if (x > 1000) {
-       throw x;
-     }
-     else if (x > 100) {
-        break;
-     }
+  var y = 10;
+  if (true) {
+    if(true) {
+      x = x + 1;
+      throw 10;
+    }
   }
 }
-finally {
+finally{
+  y = 20;
 }
-  continue;
-return result;
+return x;
