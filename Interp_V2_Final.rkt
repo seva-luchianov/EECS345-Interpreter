@@ -113,8 +113,10 @@
          [(eq? (operator expression) 'throw) ((getThrowCont continuations) (cons state (cons (Mvalue (cadr expression) state continuations) '(%throw%))))]
          [else state])])))
 
+; Get the finally expression from try / catch / finally expression
 (define finally-expression caddr)
 
+; Process the try statement and add all continuations for throw/catch and finally (if it exists)
 (define tryStatement
   (lambda (expression state continuations)
     (cond
@@ -149,6 +151,7 @@
                          (setThrowCont continuations v))))
              continuations)])))
 
+; Helper function to create the catch statement
 (define catchStatement
   (lambda (catch-expression state continuations throw-value)
     (cond
@@ -176,6 +179,7 @@
                          '()
                          (cons (car throw-value) '()))))))
 
+; Helper function to construct the finally statement
 (define finallyStatement
   (lambda (finally-expression state continuations)
     (cond
