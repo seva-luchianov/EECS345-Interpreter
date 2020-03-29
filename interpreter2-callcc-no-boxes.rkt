@@ -190,8 +190,8 @@
   (lambda (variable-names variable-values environment return break continue throw)
     (cond
       ((and (null? variable-names) (null? variable-values)) environment)
-      ((null? variable-names) (myerror "error: too many variables passed into function" variable-values))
-      ((null? variable-values) (myerror "error: not enough variables passed into function" variable-names))
+      ((null? variable-names) (myerror "error: too many variables passed into function"))
+      ((null? variable-values) (myerror "error: not enough variables passed into function"))
       (else ((if (exists? (car variable-names) environment) update insert)
              (car variable-names)
              (eval-expression (car variable-values) environment return break continue throw)
