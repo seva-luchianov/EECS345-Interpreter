@@ -192,7 +192,7 @@
       ((and (null? variable-names) (null? variable-values)) environment)
       ((null? variable-names) (myerror "error: too many variables passed into function" variable-values))
       ((null? variable-values) (myerror "error: not enough variables passed into function" variable-names))
-      (else ((if (exists? (car variable-values) environment) update insert)
+      (else ((if (exists? (car variable-names) environment) update insert)
              (car variable-names)
              (eval-expression (car variable-values) environment return break continue throw)
              (assign-function-input-variables (cdr variable-names) (cdr variable-values) environment return break continue throw))))))
