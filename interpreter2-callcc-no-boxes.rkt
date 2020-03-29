@@ -164,13 +164,14 @@
 ; we are essentially defining a variable that maps to an expression
 (define interpret-function
   (lambda (statement environment)
+    ; environment mapping is [func-name: (func-body func-vars)]
     (insert (get-function-name statement) (cons (get-function-body statement) (cons (get-function-input-variables statement) '())) environment)))
 
 (define invoke-function
   (lambda (statement environment return break continue throw)
     (if (exists? (get-function-name statement) environment)
         (interpret-block
-         (get-function-body-from-environment (lookup (get-function-name statement) environment))
+         (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
          (assign-function-input-variables
           (get-function-variables-from-environment (lookup (get-function-name statement) environment))
           (get-function-input-variables statement)
@@ -185,7 +186,7 @@
 (define assign-function-input-variables
   (lambda (variable-names variable-values environment)
     (cond
-      ((and (null? variable-names) (null? variable-values)) '())
+      ((and (null? variable-names) (null? variable-values)) environment)
       ((null? variable-names) (myerror "error: too many variables passed into function" variable-values))
       ((null? variable-values) (myerror "error: not enough variables passed into function" variable-names))
       (else (insert (car variable-names) (car variable-values) (assign-function-input-variables (cdr variable-names) (cdr variable-values) environment))))))
