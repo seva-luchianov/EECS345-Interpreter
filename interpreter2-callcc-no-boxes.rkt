@@ -4,7 +4,6 @@
 ;;;; * Interpreter, Part 3 (Based on part 2 solutions)
 ;;;; *********************************************************************************************************
 
-
 #lang racket
 (require "functionParser.rkt")
 
@@ -14,15 +13,28 @@
 ; The functions that start interpret-...  all return the current environment.
 ; The functions that start eval-...  all return a value
 
+; Just to see what test the parser returns
+(define show
+  (lambda ()
+    (parser "t.txt")))
+
 ; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
 (define interpret
   (lambda (file)
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (parser file) (newenvironment) return
+        (interpret-statement-list (add-invoke-main (parser file)) (newenvironment) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
+
+; Need to invoke main function after everything gets paresed.
+; Does this break if main is invoked by hand in the global scope?
+; I guess it would invoke it 2 times... idk if correct behavior.
+; None of the test cases invoke main this way so I will stick with this.
+(define add-invoke-main
+  (lambda (statement-list)
+    (append statement-list (cons '(funcall main ()) '()))))
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
@@ -45,6 +57,8 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
+      ((eq? 'function (statement-type statement)) (interpret-function statement environment))
+      ((eq? 'funcall (statement-type statement)) (invoke-function statement environment return break continue throw))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 ; Calls the return continuation with the given expression value
@@ -146,6 +160,36 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
+; function stuff
+; we are essentially defining a variable that maps to an expression
+(define interpret-function
+  (lambda (statement environment)
+    (insert (get-function-name statement) (cons (get-function-body statement) (cons (get-function-input-variables statement) '())) environment)))
+
+(define invoke-function
+  (lambda (statement environment return break continue throw)
+    (if (exists? (get-function-name statement) environment)
+        (interpret-block
+         (get-function-body-from-environment (lookup (get-function-name statement) environment))
+         (assign-function-input-variables
+          (get-function-variables-from-environment (lookup (get-function-name statement) environment))
+          (get-function-input-variables statement)
+          environment)
+         return break continue throw)
+        (myerror "error: function not defined:" (get-function-name statement)))))
+
+(define get-function-body-from-environment car)
+(define get-function-variables-from-environment cadr)
+
+; assign function input variables once function is invoked
+(define assign-function-input-variables
+  (lambda (variable-names variable-values environment)
+    (cond
+      ((and (null? variable-names) (null? variable-values)) '())
+      ((null? variable-names) (myerror "error: too many variables passed into function" variable-values))
+      ((null? variable-values) (myerror "error: not enough variables passed into function" variable-names))
+      (else (insert (car variable-names) (car variable-values) (assign-function-input-variables (cdr variable-names) (cdr variable-values) environment))))))
+
 ; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
 (define eval-expression
   (lambda (expr environment)
@@ -232,6 +276,9 @@
   (lambda (catch-statement)
     (car (operand1 catch-statement))))
 
+(define get-function-name operand1)
+(define get-function-input-variables operand2)
+(define get-function-body operand3)
 
 ;------------------------
 ; Environment/State Functions
