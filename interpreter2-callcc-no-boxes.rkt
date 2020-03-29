@@ -170,13 +170,15 @@
 (define invoke-function
   (lambda (statement environment return break continue throw)
     (if (exists? (get-function-name statement) environment)
-        (interpret-block
-         (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
-         (assign-function-input-variables
-          (get-function-variables-from-environment (lookup (get-function-name statement) environment))
-          (get-function-variables-for-assign statement)
-          environment return break continue throw)
-         return break continue throw)
+        (call/cc
+         (lambda (new-return)
+           (interpret-block
+            (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
+            (assign-function-input-variables
+             (get-function-variables-from-environment (lookup (get-function-name statement) environment))
+             (get-function-variables-for-assign statement)
+             environment new-return break continue throw)
+            new-return break continue throw)))
         (myerror "error: function not defined:" (get-function-name statement)))))
 
 (define get-function-body-from-environment car)
