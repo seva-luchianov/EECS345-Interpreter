@@ -18,6 +18,10 @@
   (lambda ()
     (parser "t.txt")))
 
+(define test
+  (lambda ()
+    (interpret "t.txt")))
+
 ; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
 (define interpret
   (lambda (file)
@@ -172,18 +176,32 @@
     (if (exists? (get-function-name statement) environment)
         (call/cc
          (lambda (new-return)
-           (interpret-block
-            (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
-            (assign-function-input-variables
-             (get-function-variables-from-environment (lookup (get-function-name statement) environment))
-             (get-function-variables-for-assign statement)
-             environment new-return break continue throw)
-            new-return break continue throw)))
+           (merge-env environment
+                      (interpret-block
+                       (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
+                       (assign-function-input-variables
+                        (get-function-variables-from-environment (lookup (get-function-name statement) environment))
+                        (get-function-variables-for-assign statement)
+                        (pop-frames-to-function-scope (get-function-name statement) environment)
+                        new-return break continue throw)
+                       new-return break continue throw))))
         (myerror "error: function not defined:" (get-function-name statement)))))
 
 (define get-function-body-from-environment car)
 (define get-function-variables-from-environment cadr)
 (define get-function-variables-for-assign cddr)
+
+(define pop-frames-to-function-scope
+  (lambda (function-name environment)
+    (cond
+      ((null? environment) (myerror "error: popped all frames off, but no var :(" function-name))
+      ((exists-in-list? function-name (variables (topframe environment))) environment)
+      (else (pop-frames-to-function-scope function-name (pop-frame environment))))))
+
+; src-env must have had more frames popped off than target-env
+(define merge-env
+  (lambda (target-env src-env)
+    target-env))
 
 ; assign function input variables once function is invoked
 (define assign-function-input-variables
