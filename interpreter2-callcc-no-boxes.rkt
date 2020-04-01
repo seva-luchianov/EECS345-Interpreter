@@ -74,8 +74,8 @@
 (define interpret-declare
   (lambda (statement environment return break continue throw)
     (if (exists-declare-value? statement)
-        (insert (get-declare-var statement) (box (eval-expression (get-declare-value statement) environment return break continue throw)) environment)
-        (insert (get-declare-var statement) (box 'novalue) environment))))
+        (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment return break continue throw) environment)
+        (insert (get-declare-var statement) 'novalue environment))))
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
@@ -210,12 +210,10 @@
       ((and (null? variable-names) (null? variable-values)) environment)
       ((null? variable-names) (myerror "error: too many variables passed into function"))
       ((null? variable-values) (myerror "error: not enough variables passed into function"))
-      (else (if (exists? (car variable-names) environment)(update (car variable-names) (eval-expression (car variable-values) environment return break continue throw) (assign-function-input-variables (cdr variable-names) (cdr variable-values) environment return break continue throw))
-                 (insert (car variable-names) (box (eval-expression (car variable-values) environment return break continue throw)) (assign-function-input-variables (cdr variable-names) (cdr variable-values) environment return break continue throw))
-             )))))
-             ;(car variable-names)
-             ;(eval-expression (car variable-values) environment return break continue throw)
-             ;(assign-function-input-variables (cdr variable-names) (cdr variable-values) environment return break continue throw))))))
+      (else ((if (exists? (car variable-names) environment) update insert)
+             (car variable-names)
+             (eval-expression (car variable-values) environment return break continue throw)
+             (assign-function-input-variables (cdr variable-names) (cdr variable-values) environment return break continue throw))))))
 
 ; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
 (define eval-expression
@@ -401,13 +399,13 @@
   (lambda (var val environment)
     (if (exists-in-list? var (variables (car environment)))
         (myerror "error: variable is being re-declared:" var)
-        (cons (add-to-frame var val (car environment)) (cdr environment)))))
+        (cons (add-to-frame var (box val) (car environment)) (cdr environment)))))
 
 ; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
 (define update
   (lambda (var val environment)
     (if (exists? var environment)
-        (update-existing var val environment)
+        (update-existing var (box val) environment)
         (myerror "error: variable used but not defined:" var))))
 
 ; Add a new variable/value pair to the frame.
@@ -432,10 +430,7 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist))
-       (if (void? (set-box! (car vallist) (scheme->language val))) vallist
-       (myerror "error: issue setting boxes")))
-        ;(cons (unbox ) (cdr vallist))) ;(cons (scheme->language val) (cdr vallist)))
+      ((eq? var (car varlist)) (cons (scheme->language val) (cdr vallist)))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
 ; Returns the list of variables from a frame
