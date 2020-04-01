@@ -62,8 +62,10 @@
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment return break continue throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
-      ((and (eq? 'funcall (statement-type statement))(eq? (car (cdr statement)) 'main)) (invoke-function statement environment return break continue throw))
-      ((eq? 'funcall (statement-type statement)) (merge-env environment (invoke-function statement environment return break continue throw)))
+      ((eq? 'funcall (statement-type statement))
+       (if (eq? (get-function-name statement) 'main)
+           (invoke-function statement environment return break continue throw)
+           (return-first-do-second environment (invoke-function statement environment return break continue throw))))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 ; Calls the return continuation with the given expression value
@@ -177,15 +179,15 @@
     (if (exists? (get-function-name statement) environment)
         (call/cc
          (lambda (new-return)
-           (merge-env environment
-                      (interpret-block
-                       (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
-                       (assign-function-input-variables
-                        (get-function-variables-from-environment (lookup (get-function-name statement) environment))
-                        (get-function-variables-for-assign statement)
-                        (pop-frames-to-function-scope (get-function-name statement) environment)
-                        new-return break continue throw)
-                       new-return break continue throw))))
+           (return-first-do-second environment
+                                   (interpret-block
+                                    (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
+                                    (assign-function-input-variables
+                                     (get-function-variables-from-environment (lookup (get-function-name statement) environment))
+                                     (get-function-variables-for-assign statement)
+                                     (pop-frames-to-function-scope (get-function-name statement) environment)
+                                     new-return break continue throw)
+                                    new-return break continue throw))))
         (myerror "error: function not defined:" (get-function-name statement)))))
 
 (define get-function-body-from-environment car)
@@ -198,11 +200,6 @@
       ((null? environment) (myerror "error: function not defined in lookup:" function-name))
       ((exists-in-list? function-name (variables (topframe environment))) environment)
       (else (pop-frames-to-function-scope function-name (pop-frame environment))))))
-
-; src-env must have had more frames popped off than target-env
-(define merge-env
-  (lambda (target-env src-env)
-    target-env))
 
 ; assign function input variables once function is invoked
 (define assign-function-input-variables
@@ -306,6 +303,8 @@
 (define get-function-name operand1)
 (define get-function-variables operand2)
 (define get-function-body operand3)
+
+(define return-first-do-second (lambda (first second) first))
 
 ;------------------------
 ; Environment/State Functions
@@ -431,7 +430,7 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (unbox (car varlist))) (cons (scheme->language (set-box! (car varlist) val)) (cdr vallist)))
+      ((eq? var (car varlist)) (cons (scheme->language (return-first-do-second (car vallist) (set-box! (car vallist) val))) (cdr vallist)))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
 ; Returns the list of variables from a frame
