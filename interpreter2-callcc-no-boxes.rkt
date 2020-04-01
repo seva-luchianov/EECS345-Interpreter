@@ -194,7 +194,7 @@
 (define pop-frames-to-function-scope
   (lambda (function-name environment)
     (cond
-      ((null? environment) (myerror "error: popped all frames off, but no var :(" function-name))
+      ((null? environment) (myerror "error: function not defined in lookup:" function-name))
       ((exists-in-list? function-name (variables (topframe environment))) environment)
       (else (pop-frames-to-function-scope function-name (pop-frame environment))))))
 
