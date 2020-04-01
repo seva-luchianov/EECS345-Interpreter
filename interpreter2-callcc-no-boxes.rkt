@@ -399,19 +399,19 @@
   (lambda (var val environment)
     (if (exists-in-list? var (variables (car environment)))
         (myerror "error: variable is being re-declared:" var)
-        (cons (add-to-frame var (box val) (car environment)) (cdr environment)))))
+        (cons (add-to-frame var val (car environment)) (cdr environment)))))
 
 ; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
 (define update
   (lambda (var val environment)
     (if (exists? var environment)
-        (update-existing var (box val) environment)
+        (update-existing var val environment)
         (myerror "error: variable used but not defined:" var))))
 
 ; Add a new variable/value pair to the frame.
 (define add-to-frame
   (lambda (var val frame)
-    (list (cons var (variables frame)) (cons(scheme->language val) (store frame)))))
+    (list (cons var (variables frame)) (cons(scheme->language (box val)) (store frame)))))
 
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
@@ -430,7 +430,7 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist)) (cons (scheme->language val) (cdr vallist)))
+      ((eq? var (unbox (car varlist))) (cons (scheme->language (set-box! (car varlist) val)) (cdr vallist)))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
 ; Returns the list of variables from a frame
