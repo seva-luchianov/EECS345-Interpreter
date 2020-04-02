@@ -65,7 +65,9 @@
       ((eq? 'funcall (statement-type statement))
        (if (eq? (get-function-name statement) 'main)
            (invoke-function statement environment return break continue throw)
-           (return-first-do-second environment (invoke-function statement environment return break continue throw))))
+           (begin
+             (invoke-function statement environment return break continue throw)
+             environment)))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 ; Calls the return continuation with the given expression value
@@ -179,15 +181,16 @@
     (if (exists? (get-function-name statement) environment)
         (call/cc
          (lambda (new-return)
-           (return-first-do-second environment
-                                   (interpret-block
-                                    (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
-                                    (assign-function-input-variables
-                                     (get-function-variables-from-environment (lookup (get-function-name statement) environment))
-                                     (get-function-param-values (get-function-variables-for-assign statement) environment return break continue throw)
-                                     (pop-frames-to-function-scope (get-function-name statement) environment)
-                                     new-return break continue throw)
-                                    new-return break continue throw))))
+           (begin
+             (interpret-block
+              (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
+              (assign-function-input-variables
+               (get-function-variables-from-environment (lookup (get-function-name statement) environment))
+               (get-function-param-values (get-function-variables-for-assign statement) environment return break continue throw)
+               (pop-frames-to-function-scope (get-function-name statement) environment)
+               new-return break continue throw)
+              new-return break continue throw)
+             environment)))
         (myerror "error: function not defined:" (get-function-name statement)))))
 
 (define get-function-body-from-environment car)
@@ -430,7 +433,10 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist)) (cons (scheme->language (return-first-do-second (car vallist) (set-box! (car vallist) val))) (cdr vallist)))
+      ((eq? var (car varlist)) (cons (begin
+                                       (set-box! (car vallist) (scheme->language val))
+                                       (car vallist))
+                                     (cdr vallist)))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
 ; Returns the list of variables from a frame
