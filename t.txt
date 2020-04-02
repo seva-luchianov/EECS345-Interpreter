@@ -1,17 +1,21 @@
-var a = 10;
-var b = 20;
-
-function bmethod() {
-  var b = 30;
-  return a + b;
+function divide(x, y) {
+  if (y == 0)
+    throw y;
+  return x / y;
 }
 
-function cmethod() {
-  var a = 40;
-  return bmethod() + a + b;
-}
+function main() {
+  var x;
 
-function main () {
-  var b = 5;
-  return cmethod() + a + b;
+  try {
+    x = divide(10, 5) * 10;
+    x = x + divide(5, 0);
+  }
+  catch(e) {
+    x = e;
+  }
+  finally {
+    x = x + 100;
+  }
+  return x;
 }

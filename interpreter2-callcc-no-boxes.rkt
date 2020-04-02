@@ -184,7 +184,7 @@
                                     (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
                                     (assign-function-input-variables
                                      (get-function-variables-from-environment (lookup (get-function-name statement) environment))
-                                     (get-function-variables-for-assign statement)
+                                     (get-function-param-values (get-function-variables-for-assign statement) environment return break continue throw)
                                      (pop-frames-to-function-scope (get-function-name statement) environment)
                                      new-return break continue throw)
                                     new-return break continue throw))))
@@ -472,4 +472,15 @@
                             str
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
+
+
+(define get-function-param-values
+  (lambda (value-lis environment return break continue throw)
+    (cond
+      [(null? value-lis) '()]
+      [(or (eq? (car value-lis) 'true) (eq? (car value-lis) 'false)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
+      [(and (not (number? (car value-lis))) (not (list? (car value-lis)))) (cons (lookup (car value-lis) environment) (get-function-param-values (cdr value-lis) environment return break continue throw))]
+      [(number? (car value-lis)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
+      [(list? (car value-lis)) (cons (eval-expression (car value-lis) environment return break continue throw) (get-function-param-values (cdr value-lis) environment return break continue throw))])))
+          
 
