@@ -310,9 +310,6 @@
 (define get-function-variables operand2)
 (define get-function-body operand3)
 
-;Used to return an environment/box (first) before it gets changed (second)
-(define return-first-do-second (lambda (first second) first))
-
 ;------------------------
 ; Environment/State Functions
 ;------------------------
