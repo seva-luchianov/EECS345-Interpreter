@@ -132,6 +132,7 @@
       ((null? catch-statement) (lambda (ex env) (throw ex (interpret-block finally-block env return break continue throw)))) 
       ((not (eq? 'catch (statement-type catch-statement))) (myerror "Incorrect catch statement"))
       (else (lambda (ex env)
+              (begin (display env)
               (jump (interpret-block finally-block
                                      (pop-frame (interpret-statement-list 
                                                  (get-body catch-statement) 
@@ -140,7 +141,7 @@
                                                  (lambda (env2) (break (pop-frame env2))) 
                                                  (lambda (env2) (continue (pop-frame env2))) 
                                                  (lambda (v env2) (throw v (pop-frame env2)))))
-                                     return break continue throw)))))))
+                                     return break continue throw))))))))
 
 ; To interpret a try block, we must adjust  the return, break, continue continuations to interpret the finally block if any of them are used.
 ;  We must create a new throw continuation and then interpret the try block with the new continuations followed by the finally block with the old continuations
@@ -189,9 +190,9 @@
                (get-function-variables-from-environment (lookup (get-function-name statement) environment))
                (get-function-param-values (get-function-variables-for-assign statement) environment return break continue throw)
                (push-frame (pop-frames-to-function-scope (get-function-name statement) environment))
-               new-return break continue throw)
-              new-return break continue throw)
-             environment))))
+               new-return break continue (lambda (v env) (throw v environment)))
+              new-return break continue (lambda (v env) (throw v environment))))
+             environment)))
         (myerror "error: function not defined:" (get-function-name statement)))))
 
 ;Used to make sure that functions are being evaluated in the proper scope
@@ -436,6 +437,7 @@
   (lambda (var val varlist vallist)
     (cond
       ((eq? var (car varlist)) (cons (begin
+                                       (display var) (displayln val)
                                        (set-box! (car vallist) (scheme->language val))
                                        (car vallist))
                                      (cdr vallist)))
