@@ -176,6 +176,7 @@
     ; environment mapping is [func-name: (func-body func-vars)]
     (insert (get-function-name statement) (cons (get-function-body statement) (cons (get-function-variables statement) '())) environment)))
 
+;Runs and evaluates functions invoked in the code
 (define invoke-function
   (lambda (statement environment return break continue throw)
     (if (exists? (get-function-name statement) environment)
@@ -193,10 +194,12 @@
              environment)))
         (myerror "error: function not defined:" (get-function-name statement)))))
 
+;Some function helpers/reassignments
 (define get-function-body-from-environment car)
 (define get-function-variables-from-environment cadr)
 (define get-function-variables-for-assign cddr)
 
+;Used to make sure that functions are being evaluated in the proper scope
 (define pop-frames-to-function-scope
   (lambda (function-name environment)
     (cond
@@ -307,6 +310,7 @@
 (define get-function-variables operand2)
 (define get-function-body operand3)
 
+;Used to return an environment/box (first) before it gets changed (second)
 (define return-first-do-second (lambda (first second) first))
 
 ;------------------------
@@ -479,7 +483,7 @@
                             (makestr (string-append str (string-append " " (symbol->string (car vals)))) (cdr vals))))))
       (error-break (display (string-append str (makestr "" vals)))))))
 
-
+;Does what it says on the tin (gets the param values when functions called)
 (define get-function-param-values
   (lambda (value-lis environment return break continue throw)
     (cond
