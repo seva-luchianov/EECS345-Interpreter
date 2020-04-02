@@ -4,6 +4,7 @@
 ;;;; * Interpreter, Part 3 (Based on part 2 solutions)
 ;;;; *********************************************************************************************************
 
+; Requires the new parser which includes functions.
 #lang racket
 (require "functionParser.rkt")
 
@@ -169,7 +170,6 @@
       ((not (eq? (statement-type finally-statement) 'finally)) (myerror "Incorrectly formatted finally block"))
       (else (cons 'begin (cadr finally-statement))))))
 
-; function stuff
 ; we are essentially defining a variable that maps to an expression
 (define interpret-function
   (lambda (statement environment return break continue throw)
@@ -193,11 +193,6 @@
               new-return break continue throw)
              environment))))
         (myerror "error: function not defined:" (get-function-name statement)))))
-
-;Some function helpers/reassignments
-(define get-function-body-from-environment car)
-(define get-function-variables-from-environment cadr)
-(define get-function-variables-for-assign cddr)
 
 ;Used to make sure that functions are being evaluated in the proper scope
 (define pop-frames-to-function-scope
@@ -310,8 +305,18 @@
 (define get-function-variables operand2)
 (define get-function-body operand3)
 
+(define first-param car)
+(define rest-of-param-lis cdr)
+
+(define topframe car)
+(define remainingframes cdr)
+
+(define get-function-body-from-environment car)
+(define get-function-variables-from-environment cadr)
+(define get-function-variables-for-assign cddr)
+
 ;------------------------
-; Environment/State Functions
+; Environment/State Helper Functions
 ;------------------------
 
 ; create a new empty environment
@@ -333,10 +338,6 @@
 (define pop-frame
   (lambda (environment)
     (cdr environment)))
-
-; some abstractions
-(define topframe car)
-(define remainingframes cdr)
 
 ; does a variable exist in the environment?
 (define exists?
@@ -451,7 +452,6 @@
     (cadr frame)))
 
 ; Functions to convert the Scheme #t and #f to our languages true and false, and back.
-
 (define language->scheme
   (lambda (v) 
     (cond 
@@ -485,9 +485,9 @@
   (lambda (value-lis environment return break continue throw)
     (cond
       [(null? value-lis) '()]
-      [(or (eq? (car value-lis) 'true) (eq? (car value-lis) 'false)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
-      [(and (not (number? (car value-lis))) (not (list? (car value-lis)))) (cons (lookup (car value-lis) environment) (get-function-param-values (cdr value-lis) environment return break continue throw))]
-      [(number? (car value-lis)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
-      [(list? (car value-lis)) (cons (eval-expression (car value-lis) environment return break continue throw) (get-function-param-values (cdr value-lis) environment return break continue throw))])))
+      [(or (eq? (first-param value-lis) 'true) (eq? (first-param value-lis) 'false)) (cons (first-param value-lis) (get-function-param-values (rest-of-param-lis value-lis) environment return break continue throw))]
+      [(and (not (number? (first-param value-lis))) (not (list? (first-param value-lis)))) (cons (lookup (first-param value-lis) environment) (get-function-param-values (rest-of-param-lis value-lis) environment return break continue throw))]
+      [(number? (first-param value-lis)) (cons (first-param value-lis) (get-function-param-values (rest-of-param-lis value-lis) environment return break continue throw))]
+      [(list? (first-param value-lis)) (cons (eval-expression (first-param value-lis) environment return break continue throw) (get-function-param-values (rest-of-param-lis value-lis) environment return break continue throw))])))
           
 
