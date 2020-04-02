@@ -33,10 +33,7 @@
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
-; Need to invoke main function after everything gets paresed.
-; Does this break if main is invoked by hand in the global scope?
-; I guess it would invoke it 2 times... idk if correct behavior.
-; None of the test cases invoke main this way so I will stick with this.
+; Need to invoke main function after everything gets parsed
 (define add-invoke-main
   (lambda (statement-list)
     (append statement-list (cons '(funcall main) '()))))
@@ -132,7 +129,6 @@
       ((null? catch-statement) (lambda (ex env) (throw ex (interpret-block finally-block env return break continue throw)))) 
       ((not (eq? 'catch (statement-type catch-statement))) (myerror "Incorrect catch statement"))
       (else (lambda (ex env)
-              (begin (display env)
               (jump (interpret-block finally-block
                                      (pop-frame (interpret-statement-list 
                                                  (get-body catch-statement) 
@@ -141,7 +137,7 @@
                                                  (lambda (env2) (break (pop-frame env2))) 
                                                  (lambda (env2) (continue (pop-frame env2))) 
                                                  (lambda (v env2) (throw v (pop-frame env2)))))
-                                     return break continue throw))))))))
+                                     return break continue throw)))))))
 
 ; To interpret a try block, we must adjust  the return, break, continue continuations to interpret the finally block if any of them are used.
 ;  We must create a new throw continuation and then interpret the try block with the new continuations followed by the finally block with the old continuations
@@ -437,7 +433,6 @@
   (lambda (var val varlist vallist)
     (cond
       ((eq? var (car varlist)) (cons (begin
-                                       (display var) (displayln val)
                                        (set-box! (car vallist) (scheme->language val))
                                        (car vallist))
                                      (cdr vallist)))
