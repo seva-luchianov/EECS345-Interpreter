@@ -1,12 +1,12 @@
 ;;;; *********************************************************************************************************
-;;;; * Group 28
+;;;; * Group 20
 ;;;; * EECS 345 Spring 2020
-;;;; * Interpreter, Part 3 (Based on part 2 solutions)
+;;;; * Interpreter, Part 4 (Based on part 2 solutions)
 ;;;; *********************************************************************************************************
 
 ; Requires the new parser which includes functions.
 #lang racket
-(require "functionParser.rkt")
+(require "classParser.rkt")
 
 ; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
 (define call/cc call-with-current-continuation)
@@ -29,11 +29,20 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (add-invoke-main (parser file)) (newenvironment) return
+        (interpret-statement-list (add-invoke-main (validate-top-level (parser file))) (newenvironment) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
+; Top-level must be classes only
+(define validate-top-level
+  (lambda (statement-list)
+    (cond
+      ((null? statement-list) '())
+      ((eq? (statement-type (car statement-list)) 'class) (cons (car statement-list) (validate-top-level (cdr statement-list))))
+      (else (myerror "Cannot have anything except class defined at top-level:" (statement-type (car statement-list)))))))
+
 ; Need to invoke main function after everything gets parsed
+; TODO: modify this to work with the new way functions are stored within classes
 (define add-invoke-main
   (lambda (statement-list)
     (append statement-list (cons '(funcall main) '()))))

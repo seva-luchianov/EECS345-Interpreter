@@ -1,21 +1,25 @@
-function divide(x, y) {
-  if (y == 0)
-    throw y;
-  return x / y;
+class A {
+  var x = 6;
+  var y = 7;
+
+  function prod() {
+    return this.x * this.y;
+  }
+
+  function set2(a, b) {
+    x = a;
+    y = b;
+  }
 }
 
-function main() {
-  var x;
+class B extends A {
+  function set1(a) {
+    set2(a, a);
+  }
 
-  try {
-    x = divide(10, 5) * 10;
-    x = x + divide(5, 0);
+  static function main () {
+    var b = new B();
+    b.set1(10);
+    return b.prod();
   }
-  catch(e) {
-    x = e;
-  }
-  finally {
-    x = x + 100;
-  }
-  return x;
 }
