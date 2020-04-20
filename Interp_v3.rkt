@@ -42,7 +42,25 @@
       (else (myerror "Cannot have anything except class defined at top-level:" (statement-type (car statement-list)))))))
 
 ; Need to invoke main function after everything gets parsed
-; TODO: modify this to work with the new way functions are stored within classes
+; TODO: modify this to work with the new way functions are stored within classes:
+#|
+Code:
+class A {
+    static function main() {...}
+}
+
+Need to invoke by adding new line:
+new A().main()
+
+Parsed, that line will be:
+'(funcall (dot (new A) main))
+
+Must be added only after validate-top-level is executed.
+|#
+; Potential issues:
+; Detect multiple main functions (was not a problem when all function names had to be unqiue in the global scope, but now functions can share names across class environments)
+; Detect 0 main functions (similar problem to above)
+; Proposed solution: Add a special top level environment variable that has a mapping to the first main function. Use for invoking the code, as well as for reference for subsequent function defenitions to prevent multiple main functions.
 (define add-invoke-main
   (lambda (statement-list)
     (append statement-list (cons '(funcall main) '()))))
@@ -58,6 +76,7 @@
 (define interpret-statement
   (lambda (statement environment return break continue throw)
     (cond
+      ((eq? 'class (statement-type statement)) (interpret-class statement environment return break continue throw))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return break continue throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment return break continue throw))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment return break continue throw))
@@ -76,6 +95,16 @@
              (invoke-function statement environment return break continue throw)
              environment)))
       (else (myerror "Unknown statement:" (statement-type statement))))))
+
+(define interpret-class
+  (lambda (statement environment return break continue throw)
+    (cond
+      ; Class names must be unique because we do not support sub-classes
+      ((exists? (class-name statement) environment) (myerror "Class already defined:" (class-name statement)))
+      ; Class does not extend another class, so create it with a fresh environment
+      ((null? (class-parent) statement) (insert (class-name statement) (cons (newenvironment) (class-body statement))))
+      ; Otherwise, lookup the parent class and use the environment of the parent class when initializing the new class.
+      (else (insert (class-name statement) (cons (get-stored-class-environment (lookup (class-parent-name statement))) (class-body statement)))))))
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
@@ -311,8 +340,15 @@
 (define get-function-variables operand2)
 (define get-function-body operand3)
 
-(define first-param car)
-(define rest-of-param-lis cdr)
+(define class-name cadr)
+(define class-parent caddr)
+(define class-parent-name
+  (lambda (statement)
+    (cadr (class-parent statement))))
+(define class-body cadddr)
+
+(define get-stored-class-environment car)
+(define get-stored-class-body cadr)
 
 (define topframe car)
 (define remainingframes cdr)
@@ -491,9 +527,9 @@
   (lambda (value-lis environment return break continue throw)
     (cond
       [(null? value-lis) '()]
-      [(or (eq? (first-param value-lis) 'true) (eq? (first-param value-lis) 'false)) (cons (first-param value-lis) (get-function-param-values (rest-of-param-lis value-lis) environment return break continue throw))]
-      [(and (not (number? (first-param value-lis))) (not (list? (first-param value-lis)))) (cons (lookup (first-param value-lis) environment) (get-function-param-values (rest-of-param-lis value-lis) environment return break continue throw))]
-      [(number? (first-param value-lis)) (cons (first-param value-lis) (get-function-param-values (rest-of-param-lis value-lis) environment return break continue throw))]
-      [(list? (first-param value-lis)) (cons (eval-expression (first-param value-lis) environment return break continue throw) (get-function-param-values (rest-of-param-lis value-lis) environment return break continue throw))])))
+      [(or (eq? (first-param value-lis) 'true) (eq? (car value-lis) 'false)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
+      [(and (not (number? (car value-lis))) (not (list? (car value-lis)))) (cons (lookup (car value-lis) environment) (get-function-param-values (cdr value-lis) environment return break continue throw))]
+      [(number? (car value-lis)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
+      [(list? (car value-lis)) (cons (eval-expression (car value-lis) environment return break continue throw) (get-function-param-values (cdr value-lis) environment return break continue throw))])))
           
 
