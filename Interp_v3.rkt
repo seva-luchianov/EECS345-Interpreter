@@ -234,6 +234,8 @@ Must be added only after validate-top-level is executed.
         (myerror "error: function not defined:" (get-function-name statement)))))
 
 ;Used to make sure that functions are being evaluated in the proper scope
+; TODO: this is no longer the correct functionality. Now, this function needs to pass in the environment of the class that the function is defined in.
+; - new A().whatever is easy, just use the newly created A() class's environment. But what to do for static functions?
 (define pop-frames-to-function-scope
   (lambda (function-name environment)
     (cond
