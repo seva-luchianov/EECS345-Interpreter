@@ -74,6 +74,7 @@ Must be added only after validate-top-level is executed.
 
 ; interpret a statement in the environment with continuations for return, break, continue, throw
 (define interpret-statement
+  ; We might need to pass around an evironment and a top-level-environment to help with scope issues. We have boxes so it shouldnt be a problem with references.
   (lambda (statement environment return break continue throw)
     (cond
       ((eq? 'class (statement-type statement)) (interpret-class statement environment return break continue throw))
@@ -208,8 +209,11 @@ Must be added only after validate-top-level is executed.
 ; we are essentially defining a variable that maps to an expression
 (define interpret-function
   (lambda (statement environment return break continue throw)
-    ; environment mapping is [func-name: (func-body func-vars)]
-    (insert (get-function-name statement) (cons (get-function-body statement) (cons (get-function-variables statement) '())) environment)))
+    (cond
+      ((eq? (get-function-name statement) 'main)
+       (insert-main (cons (get-function-body statement) (cons (get-function-variables statement) '()))))
+      (else ; environment mapping is [func-name: (func-body func-vars)]
+       (insert (get-function-name statement) (cons (get-function-body statement) (cons (get-function-variables statement) '())) environment)))))
 
 ;Runs and evaluates functions invoked in the code
 (define invoke-function
@@ -448,6 +452,13 @@ Must be added only after validate-top-level is executed.
         (myerror "error: variable is being re-declared:" var)
         (cons (add-to-frame var val (car environment)) (cdr environment)))))
 
+; Maybe get the top-level environment here?
+(define insert-main
+  (lambda (main-body environment)
+    (if (exists-in-list? 'main (variables (car environment)))
+        (myerror "error: can only declare one main function")
+        (cons (add-to-frame 'main main-body (car environment)) (cdr environment)))))
+
 ; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
 (define update
   (lambda (var val environment)
@@ -527,7 +538,7 @@ Must be added only after validate-top-level is executed.
   (lambda (value-lis environment return break continue throw)
     (cond
       [(null? value-lis) '()]
-      [(or (eq? (first-param value-lis) 'true) (eq? (car value-lis) 'false)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
+      [(or (eq? (car value-lis) 'true) (eq? (car value-lis) 'false)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
       [(and (not (number? (car value-lis))) (not (list? (car value-lis)))) (cons (lookup (car value-lis) environment) (get-function-param-values (cdr value-lis) environment return break continue throw))]
       [(number? (car value-lis)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
       [(list? (car value-lis)) (cons (eval-expression (car value-lis) environment return break continue throw) (get-function-param-values (cdr value-lis) environment return break continue throw))])))
