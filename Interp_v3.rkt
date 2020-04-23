@@ -25,11 +25,11 @@
 
 ; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
 (define interpret
-  (lambda (file)
+  (lambda (file class)
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-statement-list (add-invoke-main (validate-top-level (parser file))) (newenvironment) return
+        (interpret-top-level-statement-list (add-invoke-main (validate-top-level (parser file))) (newenvironment) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
@@ -62,8 +62,31 @@ Must be added only after validate-top-level is executed.
 ; Detect 0 main functions (similar problem to above)
 ; Proposed solution: Add a special top level environment variable that has a mapping to the first main function. Use for invoking the code, as well as for reference for subsequent function defenitions to prevent multiple main functions.
 (define add-invoke-main
-  (lambda (statement-list)
-    (append statement-list (cons '(funcall main) '()))))
+  (lambda (statement-list class)
+    (append statement-list (cons 'funcall (cons (cons 'dot (cons (cons 'new (cons class '())) '(main))) '())))))
+
+(define interpret-top-level-statement-list
+  (lambda (statement-list environment return break continue throw)
+    (cond
+      ((null? statement-list) environment)
+      ((eq? 'class (statement-type statement))
+       (interpret-top-level-statement-list (cdr statement-list)
+                                           (interpret-class (car statement-list) environment return break continue throw)
+                                            return break continue throw))
+      (else
+       (interpret-top-level-statement-list (cdr statement-list)
+                                           (interpret-statement (car statement-list) environment return break continue throw)
+                                            return break continue throw)))))
+
+(define interpret-class
+  (lambda (statement environment return break continue throw)
+    (cond
+      ; Class names must be unique because we do not support sub-classes
+      ((exists? (class-name statement) environment) (myerror "Class already defined:" (class-name statement)))
+      ; Class does not extend another class, so create it with a fresh environment
+      ((null? (class-parent) statement) (insert (class-name statement) (cons (newenvironment) (class-body statement))))
+      ; Otherwise, lookup the parent class and use the environment of the parent class when initializing the new class.
+      (else (insert (class-name statement) (cons (get-stored-class-environment (lookup (class-parent-name statement))) (class-body statement)))))))
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
@@ -77,7 +100,6 @@ Must be added only after validate-top-level is executed.
   ; We might need to pass around an evironment and a top-level-environment to help with scope issues. We have boxes so it shouldnt be a problem with references.
   (lambda (statement environment return break continue throw)
     (cond
-      ((eq? 'class (statement-type statement)) (interpret-class statement environment return break continue throw))
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return break continue throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment return break continue throw))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment return break continue throw))
@@ -96,16 +118,6 @@ Must be added only after validate-top-level is executed.
              (invoke-function statement environment return break continue throw)
              environment)))
       (else (myerror "Unknown statement:" (statement-type statement))))))
-
-(define interpret-class
-  (lambda (statement environment return break continue throw)
-    (cond
-      ; Class names must be unique because we do not support sub-classes
-      ((exists? (class-name statement) environment) (myerror "Class already defined:" (class-name statement)))
-      ; Class does not extend another class, so create it with a fresh environment
-      ((null? (class-parent) statement) (insert (class-name statement) (cons (newenvironment) (class-body statement))))
-      ; Otherwise, lookup the parent class and use the environment of the parent class when initializing the new class.
-      (else (insert (class-name statement) (cons (get-stored-class-environment (lookup (class-parent-name statement))) (class-body statement)))))))
 
 ; Calls the return continuation with the given expression value
 (define interpret-return
