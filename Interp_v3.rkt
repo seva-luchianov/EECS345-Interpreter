@@ -23,7 +23,8 @@
   (lambda ()
     (interpret "t.txt")))
 
-; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
+; The main function. Parser to get the parse tree and interprets it with a new environment. The returned value is in the environment.
+; Must be invoked with the filename and the class that has the main method in it.
 (define interpret
   (lambda (file class)
     (scheme->language
@@ -42,41 +43,23 @@
       (else (myerror "Cannot have anything except class defined at top-level:" (statement-type (car statement-list)))))))
 
 ; Need to invoke main function after everything gets parsed
-; TODO: modify this to work with the new way functions are stored within classes:
-#|
-Code:
-class A {
-    static function main() {...}
-}
-
-Need to invoke by adding new line:
-new A().main()
-
-Parsed, that line will be:
-'(funcall (dot (new A) main))
-
-Must be added only after validate-top-level is executed.
-|#
-; Potential issues:
-; Detect multiple main functions (was not a problem when all function names had to be unqiue in the global scope, but now functions can share names across class environments)
-; Detect 0 main functions (similar problem to above)
-; Proposed solution: Add a special top level environment variable that has a mapping to the first main function. Use for invoking the code, as well as for reference for subsequent function defenitions to prevent multiple main functions.
 (define add-invoke-main
   (lambda (statement-list class)
     (append statement-list (cons 'funcall (cons (cons 'dot (cons (cons 'new (cons class '())) '(main))) '())))))
 
+; This does not handle non-class statement at the top level scope on purpose.
+; The validate-top-level function asserts that the parsed list is valid at the top level.
+; Afterwards, we add an invoke main statement to the end of the list and that will get executed correctly here.
 (define interpret-top-level-statement-list
   (lambda (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) environment)
-      ((eq? 'class (statement-type statement))
-       (interpret-top-level-statement-list (cdr statement-list)
-                                           (interpret-class (car statement-list) environment return break continue throw)
-                                            return break continue throw))
       (else
        (interpret-top-level-statement-list (cdr statement-list)
-                                           (interpret-statement (car statement-list) environment return break continue throw)
-                                            return break continue throw)))))
+                                           ; handle interpret-class here. otherwise just invoke interpret-statement
+                                           ((if (eq? 'class (statement-type statement)) interpret-class interpret-statement)
+                                            (car statement-list) environment return break continue throw)
+                                            return break continue throw))
 
 (define interpret-class
   (lambda (statement environment return break continue throw)
@@ -102,6 +85,9 @@ Must be added only after validate-top-level is executed.
     (cond
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return break continue throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment return break continue throw))
+      ((eq? 'static-var (statement-type statement)) (interpret-static-declare statement environment return break continue throw))
+      ((eq? 'dot (statement-type statement)) (interpret-dot statement environment return break continue throw))
+      ((eq? 'new (statement-type statement)) (interpret-new statement environment return break continue throw))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment return break continue throw))
       ((eq? 'if (statement-type statement)) (interpret-if statement environment return break continue throw))
       ((eq? 'while (statement-type statement)) (interpret-while statement environment return break continue throw))
@@ -110,9 +96,13 @@ Must be added only after validate-top-level is executed.
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment return break continue throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
+      ((eq? 'constructor (statement-type statement)) (interpret-constructor statement environment return break continue throw))
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
+      ((eq? 'static-function (statement-type statement)) (interpret-static-function statement environment return break continue throw))
+      ((eq? 'abstract-function (statement-type statement)) (interpret-abstract-function statement environment return break continue throw))
       ((eq? 'funcall (statement-type statement))
        (if (eq? (get-function-name statement) 'main)
+           ; TODO: does this logic make sense anymore with the new scoping?
            (invoke-function statement environment return break continue throw)
            (begin
              (invoke-function statement environment return break continue throw)
@@ -130,6 +120,10 @@ Must be added only after validate-top-level is executed.
     (if (exists-declare-value? statement)
         (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment return break continue throw) environment)
         (insert (get-declare-var statement) 'novalue environment))))
+
+(define interpret-static-declare
+  (lambda (statement environment return break continue throw)
+    #|mystery code|#))
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
@@ -190,7 +184,7 @@ Must be added only after validate-top-level is executed.
                                                  (lambda (v env2) (throw v (pop-frame env2)))))
                                      return break continue throw)))))))
 
-; To interpret a try block, we must adjust  the return, break, continue continuations to interpret the finally block if any of them are used.
+; To interpret a try block, we must adjust the return, break, continue continuations to interpret the finally block if any of them are used.
 ;  We must create a new throw continuation and then interpret the try block with the new continuations followed by the finally block with the old continuations
 (define interpret-try
   (lambda (statement environment return break continue throw)
@@ -226,6 +220,18 @@ Must be added only after validate-top-level is executed.
        (insert-main (cons (get-function-body statement) (cons (get-function-variables statement) '()))))
       (else ; environment mapping is [func-name: (func-body func-vars)]
        (insert (get-function-name statement) (cons (get-function-body statement) (cons (get-function-variables statement) '())) environment)))))
+
+(define interpret-static-function
+  (lambda (statement environment return break continue throw)
+    #|mystery code|#))
+
+(define interpret-abstract-function
+  (lambda (statement environment return break continue throw)
+    #|mystery code|#))
+
+(define interpret-constructor
+  (lambda (statement environment return break continue throw)
+    #|mystery code|#))
 
 ;Runs and evaluates functions invoked in the code
 (define invoke-function
@@ -283,6 +289,8 @@ Must be added only after validate-top-level is executed.
 (define eval-operator
   (lambda (expr environment return break continue throw)
     (cond
+      ((eq? 'dot (operator expr)) (interpret-dot statement environment return break continue throw))
+      ((eq? 'new (operator expr)) (interpret-new statement environment return break continue throw))
       ((eq? 'funcall (operator expr)) (invoke-function expr environment return break continue throw))
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment return break continue throw)))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment return break continue throw)))
