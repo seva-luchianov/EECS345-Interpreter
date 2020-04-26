@@ -260,23 +260,30 @@
     #|mystery code|#))
 |#
 
+;TEMP
+(define convert-dot-statement
+  (lambda statement
+    (cons 'funcall (cons (operand2 (car statement)) '()))))
+         
 ;Runs and evaluates functions invoked in the code
 (define invoke-function
   (lambda (statement environment return break continue throw)
-    (if (exists? (get-function-name statement) environment)
-        (call/cc
-         (lambda (new-return)
-           (begin
-             (pop-frame (interpret-block
-              (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
-              (assign-function-input-variables
-               (get-function-variables-from-environment (lookup (get-function-name statement) environment))
-               (get-function-param-values (get-function-variables-for-assign statement) environment return break continue throw)
-               (push-frame (pop-frames-to-function-scope (get-function-name statement) environment))
-               new-return break continue (lambda (v env) (throw v environment)))
-              new-return break continue (lambda (v env) (throw v environment))))
-             environment)))
-        (myerror "error: function not defined:" (get-function-name statement)))))
+    (cond
+      ((is-dot? statement) (invoke-function (convert-dot-statement (cadr statement)) (get-dot-environment (cadr statement) environment) return break continue throw))
+      ((exists? (get-function-name statement) environment)
+            (call/cc
+             (lambda (new-return)
+               (begin
+                 (pop-frame (interpret-block
+                             (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
+                             (assign-function-input-variables
+                              (get-function-variables-from-environment (lookup (get-function-name statement) environment))
+                              (get-function-param-values (get-function-variables-for-assign statement) environment return break continue throw)
+                              (push-frame (pop-frames-to-function-scope (get-function-name statement) environment))
+                              new-return break continue (lambda (v env) (throw v environment)))
+                             new-return break continue (lambda (v env) (throw v environment))))
+                 environment))))
+            (else (myerror "error: function not defined:" (get-function-name statement))))))
 
 ;Used to make sure that functions are being evaluated in the proper scope
 ; TODO: this is no longer the correct functionality. Now, this function needs to pass in the environment of the class that the function is defined in.
@@ -410,6 +417,12 @@
 (define get-function-variables-from-environment cadr)
 (define get-function-variables-for-assign cddr)
 
+;Helper to identify dot functions
+(define is-dot?
+  (lambda statement
+    (if (list? (cadr (car statement))) #t
+        #f)))
+
 ;------------------------
 ; Environment/State Helper Functions
 ;------------------------
@@ -449,6 +462,15 @@
       ((null? l) #f)
       ((eq? var (car l)) #t)
       (else (exists-in-list? var (cdr l))))))
+
+;gets the environment used for a dot operation
+;TODO: handle new operator
+(define get-dot-environment
+  (lambda (statement environment)
+    (cond
+      ((list? (operand1 statement)) (lookup (cadr (operand1 statement)) environment))
+      (else (lookup (operand1 statement) environment)))))
+        
 
 ; Looks up a value in the environment.  If the value is a boolean, it converts our languages boolean type to a Scheme boolean type
 (define lookup
