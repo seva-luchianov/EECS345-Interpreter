@@ -30,7 +30,7 @@
     (scheme->language
      (call/cc
       (lambda (return)
-        (interpret-top-level-statement-list (add-invoke-main (validate-top-level (parser file))) (newenvironment) return
+        (interpret-top-level-statement-list (add-invoke-main (validate-top-level (parser file)) class) (newenvironment) return
                                   (lambda (env) (myerror "Break used outside of loop")) (lambda (env) (myerror "Continue used outside of loop"))
                                   (lambda (v env) (myerror "Uncaught exception thrown"))))))))
 
@@ -54,12 +54,13 @@
   (lambda (statement-list environment return break continue throw)
     (cond
       ((null? statement-list) environment)
+      ((eq? 'funcall (statement-type statement-list)) (interpret-statement statement-list environment return break continue throw))
       (else
        (interpret-top-level-statement-list (cdr statement-list)
                                            ; handle interpret-class here. otherwise just invoke interpret-statement
-                                           ((if (eq? 'class (statement-type statement)) interpret-class interpret-statement)
+                                           ((if (eq? 'class (statement-type (car statement-list))) interpret-class interpret-statement) ;statement
                                             (car statement-list) environment return break continue throw)
-                                            return break continue throw))
+                                            return break continue throw)))))
 
 (define interpret-class
   (lambda (statement environment return break continue throw)
@@ -67,9 +68,14 @@
       ; Class names must be unique because we do not support sub-classes
       ((exists? (class-name statement) environment) (myerror "Class already defined:" (class-name statement)))
       ; Class does not extend another class, so create it with a fresh environment
-      ((null? (class-parent) statement) (insert (class-name statement) (cons (newenvironment) (class-body statement))))
+      ((null? (class-parent statement)) (insert (class-name statement) (handle-class-environment (newenvironment) (class-body statement) return break continue throw) environment))
       ; Otherwise, lookup the parent class and use the environment of the parent class when initializing the new class.
-      (else (insert (class-name statement) (cons (get-stored-class-environment (lookup (class-parent-name statement))) (class-body statement)))))))
+      (else (insert (class-name statement) (cons (get-stored-class-environment (lookup (class-parent-name statement))) (class-body statement)) environment)))))
+
+;Builds class environment
+(define handle-class-environment
+  (lambda (environment body return break continue throw)
+    (interpret-statement-list body environment return break continue throw)))
 
 ; interprets a list of statements.  The environment from each statement is used for the next ones.
 (define interpret-statement-list
@@ -85,9 +91,9 @@
     (cond
       ((eq? 'return (statement-type statement)) (interpret-return statement environment return break continue throw))
       ((eq? 'var (statement-type statement)) (interpret-declare statement environment return break continue throw))
-      ((eq? 'static-var (statement-type statement)) (interpret-static-declare statement environment return break continue throw))
+      ;((eq? 'static-var (statement-type statement)) (interpret-static-declare statement environment return break continue throw))
       ((eq? 'dot (statement-type statement)) (interpret-dot statement environment return break continue throw))
-      ((eq? 'new (statement-type statement)) (interpret-new statement environment return break continue throw))
+      ;((eq? 'new (statement-type statement)) (interpret-new statement environment return break continue throw))
       ((eq? '= (statement-type statement)) (interpret-assign statement environment return break continue throw))
       ((eq? 'if (statement-type statement)) (interpret-if statement environment return break continue throw))
       ((eq? 'while (statement-type statement)) (interpret-while statement environment return break continue throw))
@@ -96,12 +102,12 @@
       ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw))
       ((eq? 'throw (statement-type statement)) (interpret-throw statement environment return break continue throw))
       ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw))
-      ((eq? 'constructor (statement-type statement)) (interpret-constructor statement environment return break continue throw))
+      ;((eq? 'constructor (statement-type statement)) (interpret-constructor statement environment return break continue throw))
       ((eq? 'function (statement-type statement)) (interpret-function statement environment return break continue throw))
-      ((eq? 'static-function (statement-type statement)) (interpret-static-function statement environment return break continue throw))
-      ((eq? 'abstract-function (statement-type statement)) (interpret-abstract-function statement environment return break continue throw))
+      ((eq? 'static-function (statement-type statement)) (interpret-function statement environment return break continue throw))
+      ;((eq? 'abstract-function (statement-type statement)) (interpret-abstract-function statement environment return break continue throw))
       ((eq? 'funcall (statement-type statement))
-       (if (eq? (get-function-name statement) 'main)
+       (if (eq? (caddr (cadr statement)) 'main) ;changed from get-function-name to operand2, add-invoke-main sets up the main function call to be using the dot operator
            ; TODO: does this logic make sense anymore with the new scoping?
            (invoke-function statement environment return break continue throw)
            (begin
@@ -120,10 +126,10 @@
     (if (exists-declare-value? statement)
         (insert (get-declare-var statement) (eval-expression (get-declare-value statement) environment return break continue throw) environment)
         (insert (get-declare-var statement) 'novalue environment))))
-
+#|
 (define interpret-static-declare
   (lambda (statement environment return break continue throw)
-    #|mystery code|#))
+    #|mystery code|#))|#
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
@@ -217,13 +223,33 @@
   (lambda (statement environment return break continue throw)
     (cond
       ((eq? (get-function-name statement) 'main)
-       (insert-main (cons (get-function-body statement) (cons (get-function-variables statement) '()))))
+       (insert-main (cons (get-function-body statement) (cons (get-function-variables statement) '())) environment))
       (else ; environment mapping is [func-name: (func-body func-vars)]
        (insert (get-function-name statement) (cons (get-function-body statement) (cons (get-function-variables statement) '())) environment)))))
 
+;Interprets dot operator
+;Handles calls for new class instance by passing to interpret-new, otherwise checks if class instance exists, calls interpret-statement on the 
+(define interpret-dot ;operand1 = class, operand2 = variable
+  (lambda (statement environment return break continue throw)
+    (cond
+      ((eq? (operator (operand1 statement)) 'new) (interpret-dot (cons 'dot (cons (interpret-new (operator (operand1 statement))) (cons (operand2 statement) '())))))
+      ((exists? (operand1 statement)) (interpret-statement (operand2 statement) (lookup (operand1 statement) environment) return break continue throw))
+      (else (myerror "Undeclared class instance: " (operand1 statement))))))
+
+;interprets new statements: returns the environment of the class
+;TODO: Should handle static/non-static variables (thinking we could have a function to go through and make new boxes in the returned environment for non-static variables, but just return the same box for static variables
+(define interpret-new
+  (lambda class
+    (cond
+      ((exists? class) (lookup class))
+      (else (myerror "Trying to use undeclared class: " class)))))
+      
+
+#|
 (define interpret-static-function
   (lambda (statement environment return break continue throw)
-    #|mystery code|#))
+    ))
+
 
 (define interpret-abstract-function
   (lambda (statement environment return break continue throw)
@@ -232,6 +258,7 @@
 (define interpret-constructor
   (lambda (statement environment return break continue throw)
     #|mystery code|#))
+|#
 
 ;Runs and evaluates functions invoked in the code
 (define invoke-function
@@ -289,8 +316,8 @@
 (define eval-operator
   (lambda (expr environment return break continue throw)
     (cond
-      ((eq? 'dot (operator expr)) (interpret-dot statement environment return break continue throw))
-      ((eq? 'new (operator expr)) (interpret-new statement environment return break continue throw))
+      ;((eq? 'dot (operator expr)) (interpret-dot statement environment return break continue throw))
+      ;((eq? 'new (operator expr)) (interpret-new statement environment return break continue throw))
       ((eq? 'funcall (operator expr)) (invoke-function expr environment return break continue throw))
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment return break continue throw)))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment return break continue throw)))
