@@ -110,9 +110,9 @@
        (if (eq? (caddr (cadr statement)) 'main) ;changed from get-function-name to operand2, add-invoke-main sets up the main function call to be using the dot operator
            ; TODO: does this logic make sense anymore with the new scoping?
            (invoke-function statement environment return break continue throw)
-           (begin
-             (invoke-function statement environment return break continue throw)
-             environment)))
+           ;(begin
+             (invoke-function statement environment return break continue throw))) ;Need to use the environment passed back right here
+             ;environment)))
       (else (myerror "Unknown statement:" (statement-type statement))))))
 
 ; Calls the return continuation with the given expression value
@@ -280,7 +280,7 @@
       ((exists? (get-function-name-dot statement) (get-dot-environment statement environment))
             (call/cc
              (lambda (new-return)
-               (begin
+               ;(begin
                  (pop-frame (interpret-block
                              (cons 'begin (get-function-body-from-environment (lookup (extract-dot-statement statement) environment)))
                              (assign-function-input-variables
@@ -289,8 +289,8 @@
                               (push-frame (pop-frames-to-function-scope (extract-dot-statement statement) environment))
                               new-return break continue (lambda (v env) (throw v environment)))
                              new-return break continue (lambda (v env) (throw v environment))
-                             (get-instance statement)))
-                 environment))))
+                             (get-instance statement))))))
+                 ;environment))))
             (else (myerror "error: function not defined:" (get-function-name-dot statement))))))
 
 ;Used to make sure that functions are being evaluated in the proper scope
@@ -618,10 +618,10 @@
   (lambda (var val varlist vallist)
     (cond
       ((eq? var (car varlist)) (cons 
-                                (begin
-                                  (box (scheme->language val)))
-                                    ;   (set-box! (car vallist) (scheme->language val))
-                                    ;   (car vallist))
+                                ;(begin
+                                  (box (scheme->language val))
+                                       ;(set-box! (car vallist) (scheme->language val))
+                                       ;(car vallist))
                                      (cdr vallist)))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
