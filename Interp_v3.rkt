@@ -233,7 +233,7 @@
 (define interpret-dot ;operand1 = class, operand2 = variable
   (lambda (statement environment return break continue throw instance)
     (cond
-      ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (lookup instance environment)))
+      ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (lookup-instance instance environment)))
       ((exists? (lookup (operand1 statement) environment) environment) (lookup (operand2 statement) (lookup (lookup (operand1 statement) environment) environment)))
       (else (lookup (operand2 statement) (lookup (operand1 statement) environment))))))
 #|    (cond
@@ -336,10 +336,18 @@
     (cond
       ((eq? 'dot (operator expr)) (interpret-dot expr environment return break continue throw instance))
       ((eq? 'new (operator expr)) (interpret-new expr environment return break continue throw))
-      ((eq? 'funcall (operator expr)) (invoke-function expr environment return break continue throw))
+      ((eq? 'funcall (operator expr))
+       (if (eq? (operand1 (extract-dot-statement expr)) 'this)
+           (invoke-function (convert-funcall-this expr instance) environment return break continue throw)
+           (invoke-function expr environment return break continue throw)))
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment return break continue throw instance)))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment return break continue throw instance)))
       (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment return break continue throw instance) environment return break continue throw instance)))))
+
+;HELPER
+(define convert-funcall-this
+  (lambda (statement instance)
+    (cons 'funcall (cons (cons 'dot (cons instance (cons (operand2 (extract-dot-statement statement)) '()))) '()))))
 
 ; Complete the evaluation of the binary operator by evaluating the second operand and performing the operation.
 (define eval-binary-op2
@@ -508,8 +516,11 @@
 
 (define lookup-instance
   (lambda (statement environment)
-    ;(lookup (lookup (operand1 statement) environment) environment)))
-    (lookup (operand1 statement) environment)))
+    (cond
+      ((and (not (list? statement)) (not (list? (lookup statement environment)))) (lookup-instance (lookup statement environment) environment))
+      ((not (list? statement)) (lookup statement environment))
+      ((list? (lookup (operand1 statement) environment)) (lookup (operand1 statement) environment))
+      (else (lookup-instance (lookup (operand1 statement) environment) environment)))))
 
 ; Looks up a value in the environment.  If the value is a boolean, it converts our languages boolean type to a Scheme boolean type
 (define lookup
