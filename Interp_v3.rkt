@@ -94,7 +94,7 @@
       ;((eq? 'static-var (statement-type statement)) (interpret-static-declare statement environment return break continue throw))
       ((eq? 'dot (statement-type statement)) (interpret-dot statement environment return break continue throw instance))
       ;((eq? 'new (statement-type statement)) (interpret-new statement environment return break continue throw))
-      ((eq? '= (statement-type statement)) (interpret-assign statement environment return break continue throw))
+      ((eq? '= (statement-type statement)) (interpret-assign statement environment return break continue throw instance))
       ((eq? 'if (statement-type statement)) (interpret-if statement environment return break continue throw))
       ((eq? 'while (statement-type statement)) (interpret-while statement environment return break continue throw))
       ((eq? 'continue (statement-type statement)) (continue environment))
@@ -133,14 +133,14 @@
 
 ; Updates the environment to add an new binding for a variable
 (define interpret-assign
-  (lambda (statement environment return break continue throw)
-    (update (get-assign-lhs statement) (eval-expression (get-assign-rhs statement) environment return break continue throw '()) environment)))
+  (lambda (statement environment return break continue throw instance)
+    (update (get-assign-lhs statement environment return break continue throw instance) (eval-expression (get-assign-rhs statement) environment return break continue throw instance) environment instance)))
 
 ; We need to check if there is an else condition.  Otherwise, we evaluate the expression and do the right thing.
 (define interpret-if
   (lambda (statement environment return break continue throw)
     (cond
-      ((eval-expression (get-condition statement) environment return break continue throw) (interpret-statement (get-then statement) environment return break continue throw))
+      ((eval-expression (get-condition statement) environment return break continue throw '()) (interpret-statement (get-then statement) environment return break continue throw))
       ((exists-else? statement) (interpret-statement (get-else statement) environment return break continue throw))
       (else environment))))
 
@@ -150,7 +150,7 @@
     (call/cc
      (lambda (break)
        (letrec ((loop (lambda (condition body environment)
-                        (if (eval-expression condition environment return break continue throw)
+                        (if (eval-expression condition environment return break continue throw '())
                             (loop condition body (interpret-statement body environment return break (lambda (env) (break (loop condition body env))) throw))
                          environment))))
          (loop (get-condition statement) (get-body statement) environment))))))
@@ -169,7 +169,7 @@
 ; We use a continuation to throw the proper value. Because we are not using boxes, the environment/state must be thrown as well so any environment changes will be kept
 (define interpret-throw
   (lambda (statement environment return break continue throw)
-    (throw (eval-expression (get-expr statement) environment return break continue throw) environment)))
+    (throw (eval-expression (get-expr statement) environment return break continue throw '()) environment)))
 
 ; Interpret a try-catch-finally block
 
@@ -234,6 +234,7 @@
   (lambda (statement environment return break continue throw instance)
     (cond
       ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (lookup instance environment)))
+      ((exists? (lookup (operand1 statement) environment) environment) (lookup (operand2 statement) (lookup (lookup (operand1 statement) environment) environment)))
       (else (lookup (operand2 statement) (lookup (operand1 statement) environment))))))
 #|    (cond
       ((eq? (operator (operand1 statement)) 'new) (interpret-dot (cons 'dot (cons (interpret-new (operator (operand1 statement))) (cons (operand2 statement) '())))))
@@ -321,7 +322,10 @@
       ((number? expr) expr)
       ((eq? expr 'true) #t)
       ((eq? expr 'false) #f)
-      ((not (list? expr)) (lookup expr environment))
+      ((not (list? expr))
+       (if (list? (lookup expr environment))
+           expr
+           (lookup expr environment)));HERE
       (else (eval-operator expr environment return break continue throw instance)))))
 
 ; Evaluate a binary (or unary) operator.  Although this is not dealing with side effects, I have the routine evaluate the left operand first and then
@@ -388,7 +392,11 @@
 (define get-declare-var operand1)
 (define get-declare-value operand2)
 (define exists-declare-value? exists-operand2?)
-(define get-assign-lhs operand1)
+(define get-assign-lhs
+  (lambda (statement environment return break continue throw instance)
+    (cond
+      ((list? (operand1 statement)) (cons 'dot (cons instance (cons (operand2 (operand1 statement)) '()))))
+      (else (operand1 statement)))))
 (define get-assign-rhs operand2)
 (define get-condition operand1)
 (define get-then operand2)
@@ -571,12 +579,18 @@
         (myerror "error: can only declare one main function")
         (cons (add-to-frame 'main main-body (car environment)) (cdr environment)))))
 
+(define update-instance
+  (lambda (var val environment instance)
+    (update instance (update-existing var val environment instance) environment instance)))
+    
+
 ; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
 (define update
-  (lambda (var val environment)
-    (if (exists? var environment)
-        (update-existing var val environment)
-        (myerror "error: variable used but not defined:" var))))
+  (lambda (var val environment instance)
+    (cond
+      ((list? var) (update-instance (operand2 var) val environment instance))
+      ((exists? var environment) (update-existing var val environment instance))
+      (else (myerror "error: variable used but not defined:" var)))))
 
 ; Add a new variable/value pair to the frame.
 (define add-to-frame
@@ -585,10 +599,13 @@
 
 ; Changes the binding of a variable in the environment to a new value
 (define update-existing
-  (lambda (var val environment)
-    (if (exists-in-list? var (variables (car environment)))
-        (cons (update-in-frame var val (topframe environment)) (remainingframes environment))
-        (cons (topframe environment) (update-existing var val (remainingframes environment))))))
+  (lambda (var val environment instance)
+    (cond
+      ((and (not (null? instance)) (exists-in-list? var (variables (car (lookup instance environment)))))
+       (cons (update-in-frame var val (topframe (lookup instance environment))) (remainingframes (lookup instance environment))))
+      ((exists-in-list? var (variables (car environment)))
+        (cons (update-in-frame var val (topframe environment)) (remainingframes environment)))
+      (else (cons (topframe environment) (update-existing var val (remainingframes environment) instance))))))
 
 ; Changes the binding of a variable in the frame to a new value.
 (define update-in-frame
@@ -600,9 +617,11 @@
 (define update-in-frame-store
   (lambda (var val varlist vallist)
     (cond
-      ((eq? var (car varlist)) (cons (begin
-                                       (set-box! (car vallist) (scheme->language val))
-                                       (car vallist))
+      ((eq? var (car varlist)) (cons 
+                                (begin
+                                  (box (scheme->language val)))
+                                    ;   (set-box! (car vallist) (scheme->language val))
+                                    ;   (car vallist))
                                      (cdr vallist)))
       (else (cons (car vallist) (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
 
@@ -651,8 +670,11 @@
     (cond
       [(null? value-lis) '()]
       [(or (eq? (car value-lis) 'true) (eq? (car value-lis) 'false)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
-      [(and (not (number? (car value-lis))) (not (list? (car value-lis)))) (cons (lookup (car value-lis) environment) (get-function-param-values (cdr value-lis) environment return break continue throw))]
+      [(and (not (number? (car value-lis))) (not (list? (car value-lis))))
+       (if (list? (lookup (car value-lis) environment))
+           (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))
+           (cons (lookup (car value-lis) environment) (get-function-param-values (cdr value-lis) environment return break continue throw)))]
       [(number? (car value-lis)) (cons (car value-lis) (get-function-param-values (cdr value-lis) environment return break continue throw))]
-      [(list? (car value-lis)) (cons (eval-expression (car value-lis) environment return break continue throw) (get-function-param-values (cdr value-lis) environment return break continue throw))])))
+      [(list? (car value-lis)) (cons (eval-expression (car value-lis) environment return break continue throw '()) (get-function-param-values (cdr value-lis) environment return break continue throw))])))
           
 
