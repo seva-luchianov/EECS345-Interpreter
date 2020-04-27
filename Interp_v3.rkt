@@ -456,6 +456,7 @@
     (cdr environment)))
 
 ; does a variable exist in the environment?
+;TODO: Update to check all 
 (define exists?
   (lambda (var environment)
     (cond
@@ -483,6 +484,7 @@
 (define dot-handle-new
   (lambda (statement)
     (cond
+      ((not (pair? statement)) statement)
       ((eq? 'new (car statement)) (operand1 statement))
       ;((not (list? statement)) (lookup statement environment))
       (else '())))) ;TODO: fix to handle instances of classes, else
@@ -501,7 +503,7 @@
   (lambda (var environment)
     (cond
       ((list? (operand1 var)) (lookup (operand2 var) (lookup (dot-handle-new (operand1 var)) environment)))
-      (else '())))) ;TODO: handle cases of instances of classes
+      (else (lookup (operand2 var) (lookup (operand1 var) environment)))))) ;TODO: handle cases of instances of classes
   
 ; A helper function that does the lookup.  Returns an error if the variable does not have a legal value
 (define lookup-variable
