@@ -231,18 +231,20 @@
 ;Handles calls for new class instance by passing to interpret-new, otherwise checks if class instance exists, calls interpret-statement on the 
 (define interpret-dot ;operand1 = class, operand2 = variable
   (lambda (statement environment return break continue throw)
-    (cond
+    (lookup (operand2 statement) (lookup (operand1 statement) environment))))
+#|    (cond
       ((eq? (operator (operand1 statement)) 'new) (interpret-dot (cons 'dot (cons (interpret-new (operator (operand1 statement))) (cons (operand2 statement) '())))))
       ((exists? (operand1 statement)) (interpret-statement (operand2 statement) (lookup (operand1 statement) environment) return break continue throw))
       (else (myerror "Undeclared class instance: " (operand1 statement))))))
+|#
 
 ;interprets new statements: returns the environment of the class
 ;TODO: Should handle static/non-static variables (thinking we could have a function to go through and make new boxes in the returned environment for non-static variables, but just return the same box for static variables
 (define interpret-new
-  (lambda class
+  (lambda (expr environment return break continue throw)
     (cond
-      ((exists? class) (lookup class))
-      (else (myerror "Trying to use undeclared class: " class)))))
+      ((exists? (operand1 expr) environment) (lookup (operand1 expr) environment))
+      (else (myerror "Trying to use undeclared class: " (operand1 expr))))))
       
 
 #|
@@ -261,29 +263,27 @@
 |#
 
 ;TEMP
-(define convert-dot-statement
-  (lambda statement
-    (cons 'funcall (cons (operand2 (car statement)) '()))))
+(define extract-dot-statement cadr)
          
 ;Runs and evaluates functions invoked in the code
 (define invoke-function
   (lambda (statement environment return break continue throw)
     (cond
-      ((is-dot? statement) (invoke-function (convert-dot-statement (cadr statement)) (get-dot-environment (cadr statement) environment) return break continue throw))
-      ((exists? (get-function-name statement) environment)
+      ;((is-dot? statement) (invoke-function statement environment return break continue throw))
+      ((exists? (get-function-name-dot statement) (get-dot-environment statement environment))
             (call/cc
              (lambda (new-return)
                (begin
                  (pop-frame (interpret-block
-                             (cons 'begin (get-function-body-from-environment (lookup (get-function-name statement) environment)))
+                             (cons 'begin (get-function-body-from-environment (lookup (extract-dot-statement statement) environment)))
                              (assign-function-input-variables
-                              (get-function-variables-from-environment (lookup (get-function-name statement) environment))
+                              (get-function-variables-from-environment (lookup (extract-dot-statement statement) environment))
                               (get-function-param-values (get-function-variables-for-assign statement) environment return break continue throw)
-                              (push-frame (pop-frames-to-function-scope (get-function-name statement) environment))
+                              (push-frame (pop-frames-to-function-scope (extract-dot-statement statement) environment))
                               new-return break continue (lambda (v env) (throw v environment)))
                              new-return break continue (lambda (v env) (throw v environment))))
                  environment))))
-            (else (myerror "error: function not defined:" (get-function-name statement))))))
+            (else (myerror "error: function not defined:" (get-function-name-dot statement))))))
 
 ;Used to make sure that functions are being evaluated in the proper scope
 ; TODO: this is no longer the correct functionality. Now, this function needs to pass in the environment of the class that the function is defined in.
@@ -292,7 +292,7 @@
   (lambda (function-name environment)
     (cond
       ((null? environment) (myerror "error: function not defined in lookup:" function-name))
-      ((exists-in-list? function-name (variables (topframe environment))) environment)
+      ((exists-in-list? (operand2 function-name) (variables (topframe (get-dot-environment function-name environment)))) environment)
       (else (pop-frames-to-function-scope function-name (pop-frame environment))))))
 
 ; assign function input variables once function is invoked
@@ -323,8 +323,8 @@
 (define eval-operator
   (lambda (expr environment return break continue throw)
     (cond
-      ;((eq? 'dot (operator expr)) (interpret-dot statement environment return break continue throw))
-      ;((eq? 'new (operator expr)) (interpret-new statement environment return break continue throw))
+      ((eq? 'dot (operator expr)) (interpret-dot expr environment return break continue throw))
+      ((eq? 'new (operator expr)) (interpret-new expr environment return break continue throw))
       ((eq? 'funcall (operator expr)) (invoke-function expr environment return break continue throw))
       ((eq? '! (operator expr)) (not (eval-expression (operand1 expr) environment return break continue throw)))
       ((and (eq? '- (operator expr)) (= 2 (length expr))) (- (eval-expression (operand1 expr) environment return break continue throw)))
@@ -397,6 +397,9 @@
     (car (operand1 catch-statement))))
 
 (define get-function-name operand1)
+(define get-function-name-dot
+  (lambda l
+    (operand2 (operand1 (car l)))))
 (define get-function-variables operand2)
 (define get-function-body operand3)
 
@@ -422,6 +425,11 @@
   (lambda statement
     (if (list? (cadr (car statement))) #t
         #f)))
+;------------------------
+; Class Environment/State Helper Functions
+;------------------------
+
+;(define 
 
 ;------------------------
 ; Environment/State Helper Functions
@@ -454,6 +462,7 @@
       ((null? environment) #f)
       ((exists-in-list? var (variables (topframe environment))) #t)
       (else (exists? var (remainingframes environment))))))
+      
 
 ; does a variable exist in a list?
 (define exists-in-list?
@@ -468,14 +477,31 @@
 (define get-dot-environment
   (lambda (statement environment)
     (cond
-      ((list? (operand1 statement)) (lookup (cadr (operand1 statement)) environment))
-      (else (lookup (operand1 statement) environment)))))
+      ((eq? 'dot (car statement)) (lookup (dot-handle-new (operand1 statement)) environment))
+      (else (get-dot-environment (cadr statement) environment)))))
+
+(define dot-handle-new
+  (lambda (statement)
+    (cond
+      ((eq? 'new (car statement)) (operand1 statement))
+      ;((not (list? statement)) (lookup statement environment))
+      (else '())))) ;TODO: fix to handle instances of classes, else
         
 
 ; Looks up a value in the environment.  If the value is a boolean, it converts our languages boolean type to a Scheme boolean type
 (define lookup
   (lambda (var environment)
-    (lookup-variable var environment)))
+    (cond
+      ((list? var) (dot-lookup-variable var environment))
+      (else (lookup-variable var environment)))))
+
+;Helper function to look for variables in specific classes
+;var comes in as (dot a x) where a is the class (either as a variable or with New) x is variable to lookup
+(define dot-lookup-variable
+  (lambda (var environment)
+    (cond
+      ((list? (operand1 var)) (lookup (operand2 var) (lookup (dot-handle-new (operand1 var)) environment)))
+      (else '())))) ;TODO: handle cases of instances of classes
   
 ; A helper function that does the lookup.  Returns an error if the variable does not have a legal value
 (define lookup-variable
