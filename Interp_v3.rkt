@@ -234,8 +234,8 @@
   (lambda (statement environment return break continue throw instance)
     (cond
       ((eq? (operand1 statement) 'this) (lookup (operand2 statement) (lookup-instance instance environment)))
-      ((exists? (lookup (operand1 statement) environment) environment) (lookup (operand2 statement) (lookup (lookup (operand1 statement) environment) environment)))
-      (else (lookup (operand2 statement) (lookup (operand1 statement) environment))))))
+      ((exists? (lookup (dot-handle-new (operand1 statement)) environment) environment) (lookup (operand2 statement) (lookup (lookup (dot-handle-new (operand1 statement)) environment) environment)))
+      (else (lookup (operand2 statement) (lookup (dot-handle-new (operand1 statement)) environment))))))
 #|    (cond
       ((eq? (operator (operand1 statement)) 'new) (interpret-dot (cons 'dot (cons (interpret-new (operator (operand1 statement))) (cons (operand2 statement) '())))))
       ((exists? (operand1 statement)) (interpret-statement (operand2 statement) (lookup (operand1 statement) environment) return break continue throw))
