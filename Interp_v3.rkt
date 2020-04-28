@@ -70,7 +70,19 @@
       ; Class does not extend another class, so create it with a fresh environment
       ((null? (class-parent statement)) (insert (class-name statement) (handle-class-environment (newenvironment) (class-body statement) return break continue throw) environment))
       ; Otherwise, lookup the parent class and use the environment of the parent class when initializing the new class.
-      (else (insert (class-name statement) (cons (get-stored-class-environment (lookup (class-parent-name statement))) (class-body statement)) environment)))))
+      (else (insert (class-name statement) (insert-class-extend (class-name statement) (class-body statement) (insert (class-name statement) (get-stored-class-environment (lookup (class-parent-name statement) environment)) environment) return break continue throw) environment)))))
+
+
+(define insert-class-extend
+  (lambda (var val environment return break continue throw)
+    (cond
+      ((null? val) (cons (lookup var environment) '()))
+      ((exists-in-list? (operand1 (car val)) (variables (lookup var environment)))
+       (if (or (eq? (operator (car val)) 'function) (eq? (operator (car val)) 'static-function))
+           (update (operand1 (car val)) (cons (get-function-body (car val)) (cons (get-function-variables (car val)) '())) (insert-class-extend var (cdr val) environment return break continue throw) '())
+           (update (operand1 (car val)) (operand2 (car val)) (insert-class-extend var (cdr val) environment return break continue throw) '())))
+      ((or (eq? (operator (car val)) 'function) (eq? (operator (car val)) 'static-function)) (insert (operand1 (car val)) (cons (get-function-body (car val)) (cons (get-function-variables (car val)) '())) (insert-class-extend var (cdr val) environment return break continue throw)))
+      (else (insert (operand1 (car val)) (operand2 (car val)) (insert-class-extend var (cdr val) environment return break continue throw))))))
 
 ;Builds class environment
 (define handle-class-environment
@@ -448,11 +460,6 @@
   (lambda statement
     (if (list? (cadr (car statement))) #t
         #f)))
-;------------------------
-; Class Environment/State Helper Functions
-;------------------------
-
-;(define 
 
 ;------------------------
 ; Environment/State Helper Functions
@@ -582,6 +589,9 @@
     (if (exists-in-list? var (variables (car environment)))
         (myerror "error: variable is being re-declared:" var)
         (cons (add-to-frame var val (car environment)) (cdr environment)))))
+
+;insert-class-extend placeholder
+
 
 ; Maybe get the top-level environment here?
 (define insert-main
